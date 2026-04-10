@@ -67,7 +67,7 @@ export default function LoginScreen({ onLogin, onGoRegister}){
                             <InputField label="Correo" value={email} onChange={setEmail} placeholder="ejemplo@mail.com" />
                             <InputField label="Contraseña" type="password" value={pw} onChange={setPw} placeholder="••••••••" />
                         </div>
-                        <BtnPrimary onClick={onLogin} disabled={loading} style={{ width: "100%", marginBottom: 16 }}>
+                        <BtnPrimary onClick={handleLogin} disabled={loading} style={{ width: "100%", marginBottom: 16 }}>
                             {loading ? "Iniciando..." : "Inicia Sesión"}
                         </BtnPrimary>
                         <p style={{ fontSize: 12, color: C.textMuted, textAlign: "center" }}>

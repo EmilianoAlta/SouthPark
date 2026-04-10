@@ -9,6 +9,8 @@ import { supabase } from "../supabaseClient";
 
 export default function RegisterScreen({ onRegister, onGoLogin }) {
     const [name, setName] = useState(""); 
+    const [lastname1, setLastName1] = useState("");
+    const [lastname2, setLastName2] = useState("");
     const [empNum, setEmpNum] = useState("");
     const [email, setEmail] = useState(""); 
     const [pw, setPw] = useState("");
@@ -18,7 +20,7 @@ export default function RegisterScreen({ onRegister, onGoLogin }) {
     // 1. CREAMOS LA FUNCIÓN DE REGISTRO
     const handleRegister = async () => {
         // Validaciones básicas
-        if (!email || !pw || !name || !empNum) {
+        if (!email || !pw || !name || !lastname1 || !empNum) { //algunos empleados pueden venir del extranjero donde solo tienen un apellido por lo que solo se valida el primero
             setErrorMsg("Por favor, llena todos los campos.");
             return;
         }
@@ -29,11 +31,13 @@ export default function RegisterScreen({ onRegister, onGoLogin }) {
         try {
             // Llamada a Supabase
             const { data, error } = await supabase.auth.signUp({
-            email: email,
+            email: email.trim(),
             password: pw,
             options: {
                 data: {
                 nombre: name,
+                primer_apellido: lastname1,
+                segundo_apellido: lastname2 || null,
                 numero_empleado: empNum // Lo guardamos en los metadatos de auth
                 }
             }
@@ -84,11 +88,15 @@ export default function RegisterScreen({ onRegister, onGoLogin }) {
                         )}
                         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
                             <InputField label="Nombre" value={name} onChange={setName} placeholder="Tu nombre" />
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                                <InputField label="Primer Apellido" value={lastname1} onChange={setLastName1} placeholder="Paterno" />
+                                <InputField label="Segundo Apellido" value={lastname2} onChange={setLastName2} placeholder="Materno (Opcional)" />
+                            </div>
                             <InputField label="Número de empleado" value={empNum} onChange={setEmpNum} placeholder="EMP-XXXXX" />
                             <InputField label="Correo" value={email} onChange={setEmail} placeholder="ejemplo@mail.com" />
                             <InputField label="Contraseña" type="password" value={pw} onChange={setPw} placeholder="••••••••" />
                         </div>
-                        <BtnPrimary onClick={onRegister} disabled={loading} style={{ width: "100%", marginTop: 8 }}>
+                        <BtnPrimary onClick={handleRegister} disabled={loading} style={{ width: "100%", marginTop: 8 }}>
                             {loading ? "Registrando..." : "Regístrate"}
                         </BtnPrimary>
                     </div>
