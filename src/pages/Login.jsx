@@ -17,6 +17,14 @@ export default function LoginScreen({ onLogin, onGoRegister}){
             setErrorMsg("Por favor, ingresa tu correo y contraseña.");
             return;
         }
+
+        //validacion del dominio
+        const emailLower = email.trim().toLowerCase();
+        //se mantiene tec.mx para debugging
+        if (!emailLower.endsWith("@accenture.com") && !emailLower.endsWith("@tec.mx")) {
+            setErrorMsg("Solo se permiten correos de @accenture.com o @tec.mx");
+            return;
+        }
         setLoading(true);
         setErrorMsg("");
         try {

@@ -25,6 +25,14 @@ export default function RegisterScreen({ onRegister, onGoLogin }) {
             return;
         }
 
+        //validacion de email
+        const emailLowerCase = email.trim().toLowerCase();
+        const isValidDomain = emailLower.endsWith("@accenture.com") || emailLower.endsWith("@tec.mx");
+
+        if (!isValidDomain) {
+            setErrorMsg("Correo Electronico Invalido, Por favor, use su correo corporativo válido");
+            return;
+        }
         setLoading(true);
         setErrorMsg("");
 

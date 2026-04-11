@@ -10,6 +10,7 @@ import { useUser } from "../context/UserContext";
 // Importamos las vistas segmentadas
 import ReservationsView from "../components/ReservationsView";
 import ProfileView from "../components/ProfileView";
+import { supabase } from "../supabaseClient";
 
 export default function DashboardApp({ onLogout }) {
   const [screen, setScreen] = useState("areas");
@@ -20,12 +21,27 @@ export default function DashboardApp({ onLogout }) {
   const [selectedArea, setSelectedArea] = useState(null);
   const [selectedFloor, setSelectedFloor] = useState(1);
   const [reserveModal, setReserveModal] = useState(null);
-  
+  const [bdEspacios, setBDEspacios] = useState([]);
   // Estado exclusivo para IA
   const [expandedRec, setExpandedRec] = useState(null);
 
   // Control de animación al cambiar pestaña
   useEffect(() => { 
+    if(screen == "areas"){
+      const fetchEspaciosYReservas = async () => {
+        const {data, error} = await supabase
+        .from("Espacio")
+        .select(`*, Reserva(
+          id_reserva,
+          asistentes,
+          id_estado
+        )
+        `);
+        if (!error && data) setBDEspacios(data);
+        else console.error("Error trayendo el mapa:", error);
+      };
+      fetchEspaciosYReservas();
+    }
     setAnimateIn(false); 
     const t = setTimeout(() => setAnimateIn(true), 50); 
     return () => clearTimeout(t); 
@@ -106,7 +122,7 @@ export default function DashboardApp({ onLogout }) {
             {screen === "reservations" && <ReservationsView animateIn={animateIn} onGoToAreas={() => setScreen("areas")} />}
             {screen === "profile" && <ProfileView animateIn={animateIn} />}
 
-            {/* ═══ VISTAS NO SEGMENTADAS (Tu código intacto) ═══ */}
+            {/* ═══ VISTAS NO SEGMENTADAS  ═══ */}
             
             {/* ═══ AREAS DISPONIBLES (Floor Map) ═══ */}
             {screen === "areas" && (
@@ -136,23 +152,71 @@ export default function DashboardApp({ onLogout }) {
                       <path d="M 3 5 L 97 5 L 97 28 L 95 28 L 95 80 L 5 80 L 5 28 L 3 28 Z" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.4" />
                       {[20, 40, 60, 80].map(y => <line key={`h${y}`} x1="3" y1={y * 0.82} x2="97" y2={y * 0.82} stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
                       {[20, 40, 60, 80].map(x => <line key={`v${x}`} x1={x} y1="5" x2={x} y2="80" stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
-                      {floorAreas.map(area => (
-                        <g key={area.id} onClick={() => setSelectedArea(area)} style={{ cursor: "pointer" }}>
-                          <rect x={area.x} y={area.y} width={area.w} height={area.h} rx="1.5"
-                            fill={selectedArea?.id === area.id ? `${areaStatusColor(area.status)}30` : `${areaStatusColor(area.status)}15`}
-                            stroke={selectedArea?.id === area.id ? areaStatusColor(area.status) : `${areaStatusColor(area.status)}60`}
-                            strokeWidth={selectedArea?.id === area.id ? "0.6" : "0.3"}
-                            style={{ transition: "all 0.3s" }}
-                          />
-                          <text x={area.x + area.w / 2} y={area.y + area.h / 2 - 2} textAnchor="middle" fill={C.white} fontSize="2.8" fontWeight="700" fontFamily="inherit">{area.name}</text>
-                          <text x={area.x + area.w / 2} y={area.y + area.h / 2 + 4} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="2" fontFamily="inherit">{area.type}</text>
-                          {Array.from({ length: Math.min(area.capacity, 8) }).map((_, di) => (
-                            <circle key={di} cx={area.x + 3 + (di % 4) * 4} cy={area.y + area.h - 4 + Math.floor(di / 4) * 3} r="0.8"
-                              fill={di < area.capacity * (area.status === "occupied" ? 0.8 : area.status === "available" ? 0.2 : 0.5) ? areaStatusColor(area.status) : "rgba(255,255,255,0.1)"}
+                      {floorAreas.map(area => {
+                        //llamada a base de datos
+                        const espacioBD = bdEspacios.find(e => e.codigo === area.id);
+                        
+                        //capacidad real (fallback añadido)
+                        const capacidadReal = espacioBD ? espacioBD.capacidad : area.capacity;
+                        const estadoEspacio = espacioBD ? espacioBD.estado_espacio : (area.status === 'maintenance' ? 'mantenimiento' : (area.status === 'occupied' ? 'ocupado' : 'disponible'));
+                        // si hay reservas anidadas
+                        const reservasAct = espacioBD?.Reserva?.find(r => r.id_estado === 1 || r.id_estado === 2);
+
+                        //si no hay reservas actuales se pone 0 si hay se leeen sus asistentes
+                        let asistentesActuales = 0;
+                        if (estadoEspacio === "ocupado"){
+                          asistentesActuales = capacidadReal;
+                        } else if (reservasAct) {
+                          asistentesActuales = reservasAct.asistentes;
+                        } else if (!espacioBD && area.status === 'occupied') {
+                          asistentesActuales = capacidadReal; // Fallback 
+                        }
+                        //Si esta en mantenimiento
+                        const isMaintenance = estadoEspacio === 'mantenimiento';
+
+                        //calcular el esado general 
+                        let boxStatus = 'available';
+                        if (isMaintenance) boxStatus = 'maintenance';
+                        else if (asistentesActuales >= capacidadReal || estadoEspacio === 'ocupado') boxStatus = 'occupied';
+
+                        return(
+                          <g key={area.id} onClick={() => setSelectedArea({...area, dbId: espacioBD?.id_espacio})} style={{ cursor: "pointer" }}>
+                            <rect x={area.x} y={area.y} width={area.w} height={area.h} rx="1.5"
+                              fill={selectedArea?.id === area.id ? `${areaStatusColor(boxStatus)}30` : `${areaStatusColor(boxStatus)}15`}
+                              stroke={selectedArea?.id === area.id ? areaStatusColor(boxStatus) : `${areaStatusColor(boxStatus)}60`}
+                              strokeWidth={selectedArea?.id === area.id ? "0.6" : "0.3"}
+                              style={{ transition: "all 0.3s" }}
                             />
-                          ))}
-                        </g>
-                      ))}
+                            <text x={area.x + area.w / 2} y={area.y + area.h / 2 - 2} textAnchor="middle" fill={C.white} fontSize="2.8" fontWeight="700" fontFamily="inherit">{area.name}</text>
+                            <text x={area.x + area.w / 2} y={area.y + area.h / 2 + 4} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="2" fontFamily="inherit">{area.type}</text>
+                            {Array.from({ length: Math.min(area.capacity, 8) }).map((_, di) => {
+
+                              let dotColor = C.success; // Verde por defecto (Disponible)
+                              if (isMaintenance) {
+                                dotColor = C.warning; // Amarillo (Mantenimiento)
+                              } else if (di < asistentesActuales) {
+                                dotColor = C.danger; // Rojo (Ocupado)
+                              }
+
+                              // Sabiendo que el máximo por fila es 4 y la separación (gap) es 4px:
+                              const puntosEnFila = Math.min(area.capacity, 4); 
+                              const anchoDeFila = (puntosEnFila - 1) * 4; 
+                              const startX = (area.x + area.w / 2) - (anchoDeFila / 2); // Calcula el centro exacto
+
+                              return(
+                                <circle 
+                                  key={di} 
+                                  cx={startX + (di % 4) * 4} 
+                                  cy={area.y + area.h - 4 + Math.floor(di / 4) * 3} 
+                                  r="0.8"
+                                  fill={dotColor}
+                                  style={{ transition: "fill 0.3s ease"}}
+                                />
+                              );
+                            })}
+                          </g>
+                        );
+                      })}
                     </svg>
 
                     {/* Legend */}
