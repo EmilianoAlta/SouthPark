@@ -3,7 +3,6 @@ import React, { useState, useEffect } from "react";
 import { C, aiRecommendations, floorAreas, gamificationData } from "../config/constants";
 import { Logo, Icons } from "../components/ui/Icons";
 import { BtnPrimary, BtnSecondary } from "../components/ui/Buttons";
-import { InputField } from "../components/ui/InputField";
 import { StatusBadge, PulseDot, ConfidenceMeter, XPBar } from "../components/ui/Widgets";
 import { useUser } from "../context/UserContext";
 
@@ -17,26 +16,52 @@ export default function DashboardApp({ onLogout }) {
   const [animateIn, setAnimateIn] = useState(false);
   const { userProfile } = useUser();
 
-  // Estados exclusivos para la vista de Áreas (se mantienen aquí porque la vista no está segmentada)
   const [selectedArea, setSelectedArea] = useState(null);
   const [selectedFloor, setSelectedFloor] = useState(1);
   const [reserveModal, setReserveModal] = useState(null);
   const [bdEspacios, setBDEspacios] = useState([]);
-  // Estado exclusivo para IA
   const [expandedRec, setExpandedRec] = useState(null);
+  const [floatAlert, setFloatAlert] = useState(null);
 
-  // Control de animación al cambiar pestaña
+  const ShowFloatAlert = (message, type = "success") => {
+    setFloatAlert({message, type});
+    setTimeout(() => setFloatAlert(null), 4000);
+  }
+
+  const [isReserving, setIsReserving] = useState(false);
+  const [formReserva, setFormReserva] = useState({
+    fecha_reserva: "",
+    hora_inicio: "",
+    hora_fin: "",
+    asistentes: ""
+  });
+
+  // Constantes de horas (Monterrey)
+  const hoy = new Date();
+  // Extraemos la fecha exacta sin alterar la zona horaria del navegador
+  const yyyy = hoy.getFullYear();
+  const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dd = String(hoy.getDate()).padStart(2, '0');
+  const fechaHoyStr = `${yyyy}-${mm}-${dd}`;
+  // Extraemos la hora exacta en formato 24hrs compatible con Supabase
+  const hh = String(hoy.getHours()).padStart(2, '0');
+  const min = String(hoy.getMinutes()).padStart(2, '0');
+  const horaActualStr = `${hh}:${min}:00`;
+  
+  // funcion para limpiar el modal de reserva
+  const cerrarModalYLimpiar = () => {
+    setReserveModal(null);
+    setFormReserva({ fecha_reserva: "", hora_inicio: "", hora_fin: "", asistentes: "" });
+    setIsReserving(false);
+  };
+
   useEffect(() => { 
-    if(screen == "areas"){
+    if(screen === "areas"){
       const fetchEspaciosYReservas = async () => {
         const {data, error} = await supabase
         .from("Espacio")
-        .select(`*, Reserva(
-          id_reserva,
-          asistentes,
-          id_estado
-        )
-        `);
+        .select(`*, Reserva(id_reserva, asistentes, id_estado, fecha_reserva, hora_inicio, hora_fin)`);
+        
         if (!error && data) setBDEspacios(data);
         else console.error("Error trayendo el mapa:", error);
       };
@@ -49,9 +74,7 @@ export default function DashboardApp({ onLogout }) {
 
   if (!userProfile) return null;
 
-  // Calculamos iniciales para el header/sidebar
   const iniciales = `${userProfile.nombre?.[0] || ""}${userProfile.primer_apellido?.[0] || ""}`.toUpperCase();
-
   const areaStatusColor = (s) => s === "available" ? C.success : s === "occupied" ? C.danger : C.warning;
 
   const sidebarItems = [
@@ -62,10 +85,100 @@ export default function DashboardApp({ onLogout }) {
     { id: "profile", icon: Icons.user, label: "Perfil" },
   ];
 
+  const handleConfirmReserve = async () => {
+    if(!formReserva.fecha_reserva || !formReserva.hora_inicio || !formReserva.hora_fin || !formReserva.asistentes) {
+      ShowFloatAlert("Por favor, completa todos los campos para reservar.", "error");
+      return;
+    }
+    if(formReserva.hora_inicio >= formReserva.hora_fin) {
+      ShowFloatAlert("La hora de inicio debe ser anterior a la hora de fin.", "error");
+      return;
+    }
+
+    //Obtener el ID numérico correcto del espacio
+    const espacioReal = bdEspacios.find(e => e.codigo === reserveModal.id);
+    const espacioIdNumeric = reserveModal.dbId || espacioReal?.id_espacio;
+
+    //Obtener la capacidad real del espacio
+    const capacidadReal = espacioReal?.capacidad || reserveModal.capacity;
+    if (!espacioIdNumeric) {
+      ShowFloatAlert("Error: No se pudo verificar la identidad de la sala en la base de datos.", "error");
+      return;
+    }
+
+    setIsReserving(true);
+    try{
+      const {data: reservasExistentes, error: errorReservas} = await supabase
+        .from("Reserva")
+        .select('hora_inicio, hora_fin, asistentes')
+        .eq('id_espacio', espacioIdNumeric)
+        .eq('fecha_reserva', formReserva.fecha_reserva)
+        .in('id_estado', [1, 2, 3]); 
+
+      if(errorReservas) throw errorReservas;
+
+      // 1. Filtramos todas las reservas que chocan con nuestro horario
+      const reservasEnConflicto = reservasExistentes?.filter(r => {
+        const startA = formReserva.hora_inicio;
+        const endA = formReserva.hora_fin;
+        const startB = r.hora_inicio.slice(0,5);
+        const endB = r.hora_fin.slice(0,5);
+        // Hay choque si nuestro inicio es antes de su fin, Y nuestro fin es después de su inicio
+        return (startA < endB && endA > startB); 
+      }) || [];
+
+      // 2. Sumamos los asistentes de las reservas que chocan
+      const lugaresOcupados = reservasEnConflicto?.filter(r => {
+        return (formReserva.hora_inicio < r.hora_fin && formReserva.hora_fin > r.hora_inicio);
+      }).reduce((s, r) => s + r.asistentes, 0) || 0;
+
+      const lugaresSolicitados = parseInt(formReserva.asistentes);
+
+      // 3. Verificamos si hay espacio suficiente
+      if (lugaresOcupados + lugaresSolicitados > capacidadReal) {
+        const lugaresRestantes = Math.max(0, capacidadReal - lugaresOcupados);
+        ShowFloatAlert(`Sin cupo suficiente. Solo quedan ${lugaresRestantes} lugares disponibles en ese horario.`, "error");
+        setIsReserving(false);
+        return;
+      }
+
+      // 🟢 GUARDADO DE RESERVA
+      const { error: errorCrearReserva } = await supabase.from('Reserva').insert({
+        id_usuario: userProfile.id_usuario,
+        id_espacio: parseInt(espacioIdNumeric), // Usamos el numérico aquí
+        fecha_reserva: formReserva.fecha_reserva,
+        hora_inicio: `${formReserva.hora_inicio}:00`,
+        hora_fin: `${formReserva.hora_fin}:00`,
+        id_estado: 1, 
+        asistentes: lugaresSolicitados
+      });
+
+      if(errorCrearReserva) throw errorCrearReserva;
+
+      // Si con esta reserva el área se llena para este momento, la marcamos en la DB
+      if (lugaresOcupados + lugaresSolicitados === capacidadReal) {
+        await supabase
+          .from("Espacio")
+          .update({ estado_espacio: 'ocupado', disponible: false })
+          .eq('id_espacio', espacioIdNumeric);
+      }
+
+      ShowFloatAlert(`Reserva creada exitosamente para ${reserveModal.name}.`, "success");
+      cerrarModalYLimpiar();
+      // Recargar datos en el mapa inmediatamente
+      const {data} = await supabase.from("Espacio").select(`*, Reserva(*)`);
+      if (data) setBDEspacios(data);
+
+    } catch(error){
+      console.error("Error creando reserva:", error);
+      ShowFloatAlert(`Error: ${error.message || "Error al conectar con la base de datos."}`, "error");
+    } finally{
+      setIsReserving(false);
+    }
+  }
+  
   return (
     <div style={{ fontFamily: "'Nunito Sans', sans-serif", minHeight: "100vh", display: "flex", flexDirection: "column", background: "#1a0a1e", color: C.text }}>
-      
-      {/* Header */}
       <header style={{ background: C.headerBg, height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 28px", borderBottom: `1px solid ${C.glassBorder}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Logo size={44} />
@@ -80,9 +193,7 @@ export default function DashboardApp({ onLogout }) {
       </header>
 
       <div className="dash-layout">
-        {/* Sidebar */}
         <nav className="dash-sidebar" style={{ background: C.cardLight, padding: "24px 16px", display: "flex", flexDirection: "column", gap: 6, borderRight: `1px solid ${C.glassBorder}` }}>
-           {/* Perfil en Sidebar */}
            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", marginBottom: 12 }}>
             <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontWeight: 800, fontSize: 18 }}>
               {iniciales}
@@ -114,23 +225,18 @@ export default function DashboardApp({ onLogout }) {
           </button>
         </nav>
 
-        {/* CONTENIDO PRINCIPAL */}
         <main className="dash-main" style={{ padding: 32 }}>
           <div style={{ animation: animateIn ? "fadeUp 0.5s ease forwards" : "none", opacity: animateIn ? 1 : 0 }}>
 
-            {/* ═══ VISTAS SEGMENTADAS ═══ */}
             {screen === "reservations" && <ReservationsView animateIn={animateIn} onGoToAreas={() => setScreen("areas")} />}
             {screen === "profile" && <ProfileView animateIn={animateIn} />}
 
-            {/* ═══ VISTAS NO SEGMENTADAS  ═══ */}
-            
-            {/* ═══ AREAS DISPONIBLES (Floor Map) ═══ */}
             {screen === "areas" && (
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
                   <div>
                     <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 4 }}>Areas Disponibles</h1>
-                    <p style={{ fontSize: 14, color: C.textMuted }}>Selecciona un área en el mapa para ver detalles</p>
+                    <p style={{ fontSize: 14, color: C.textMuted }}>Ocupación en tiempo real: {fechaHoyStr} | {horaActualStr.slice(0,5)}</p>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <span style={{ fontSize: 13, color: C.textMuted }}>Piso</span>
@@ -144,41 +250,35 @@ export default function DashboardApp({ onLogout }) {
                 </div>
 
                 <div style={{ display: "flex", gap: 24 }}>
-                  {/* Floor Map */}
                   <div style={{ flex: 1, borderRadius: 16, border: `2px solid ${C.glassBorder}`, background: "rgba(0,0,0,0.6)", padding: 20, position: "relative", overflow: "hidden" }}>
                     <div style={{ position: "absolute", top: 16, left: 20, fontSize: 12, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", zIndex: 2 }}>Piso {selectedFloor}</div>
-                    {/* Map SVG */}
                     <svg viewBox="0 0 100 82" style={{ width: "100%", height: "auto" }}>
                       <path d="M 3 5 L 97 5 L 97 28 L 95 28 L 95 80 L 5 80 L 5 28 L 3 28 Z" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.4" />
                       {[20, 40, 60, 80].map(y => <line key={`h${y}`} x1="3" y1={y * 0.82} x2="97" y2={y * 0.82} stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
                       {[20, 40, 60, 80].map(x => <line key={`v${x}`} x1={x} y1="5" x2={x} y2="80" stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
                       {floorAreas.map(area => {
-                        //llamada a base de datos
                         const espacioBD = bdEspacios.find(e => e.codigo === area.id);
-                        
-                        //capacidad real (fallback añadido)
                         const capacidadReal = espacioBD ? espacioBD.capacidad : area.capacity;
-                        const estadoEspacio = espacioBD ? espacioBD.estado_espacio : (area.status === 'maintenance' ? 'mantenimiento' : (area.status === 'occupied' ? 'ocupado' : 'disponible'));
-                        // si hay reservas anidadas
-                        const reservasAct = espacioBD?.Reserva?.find(r => r.id_estado === 1 || r.id_estado === 2);
-
-                        //si no hay reservas actuales se pone 0 si hay se leeen sus asistentes
-                        let asistentesActuales = 0;
-                        if (estadoEspacio === "ocupado"){
-                          asistentesActuales = capacidadReal;
-                        } else if (reservasAct) {
-                          asistentesActuales = reservasAct.asistentes;
-                        } else if (!espacioBD && area.status === 'occupied') {
-                          asistentesActuales = capacidadReal; // Fallback 
+                        
+                        const isMaintenance = espacioBD?.estado_espacio === 'mantenimiento';
+                        const isOccupiedByAdmin = espacioBD?.estado_espacio === 'ocupado';
+                        
+                        // Sumar TODOS los asistentes que estén AHORA mismo
+                        let asistentesAhora = 0;
+                        if (isOccupiedByAdmin) {
+                          asistentesAhora = capacidadReal; 
+                        } else {
+                          const reservasActivas = espacioBD?.Reserva?.filter(r => 
+                            (r.id_estado === 1 || r.id_estado === 2) && 
+                            r.fecha_reserva === fechaHoyStr &&
+                            horaActualStr >= r.hora_inicio && horaActualStr < r.hora_fin // < en vez de <= para evitar overlap de horas exactas
+                          ) || [];
+                          
+                          // Sumamos los asistentes de todas las reservas que están corriendo en este segundo
+                          asistentesAhora = reservasActivas.reduce((suma, r) => suma + r.asistentes, 0);
                         }
-                        //Si esta en mantenimiento
-                        const isMaintenance = estadoEspacio === 'mantenimiento';
 
-                        //calcular el esado general 
-                        let boxStatus = 'available';
-                        if (isMaintenance) boxStatus = 'maintenance';
-                        else if (asistentesActuales >= capacidadReal || estadoEspacio === 'ocupado') boxStatus = 'occupied';
-
+                        const boxStatus = isMaintenance ? 'maintenance' : (asistentesAhora >= capacidadReal ? 'occupied' : 'available')
                         return(
                           <g key={area.id} onClick={() => setSelectedArea({...area, dbId: espacioBD?.id_espacio})} style={{ cursor: "pointer" }}>
                             <rect x={area.x} y={area.y} width={area.w} height={area.h} rx="1.5"
@@ -189,19 +289,18 @@ export default function DashboardApp({ onLogout }) {
                             />
                             <text x={area.x + area.w / 2} y={area.y + area.h / 2 - 2} textAnchor="middle" fill={C.white} fontSize="2.8" fontWeight="700" fontFamily="inherit">{area.name}</text>
                             <text x={area.x + area.w / 2} y={area.y + area.h / 2 + 4} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="2" fontFamily="inherit">{area.type}</text>
-                            {Array.from({ length: Math.min(area.capacity, 8) }).map((_, di) => {
+                            {Array.from({ length: Math.min(capacidadReal, 8) }).map((_, di) => {
 
-                              let dotColor = C.success; // Verde por defecto (Disponible)
+                              let dotColor = C.success; 
                               if (isMaintenance) {
-                                dotColor = C.warning; // Amarillo (Mantenimiento)
-                              } else if (di < asistentesActuales) {
-                                dotColor = C.danger; // Rojo (Ocupado)
+                                dotColor = C.warning; 
+                              } else if (di < asistentesAhora) {
+                                dotColor = C.danger; 
                               }
 
-                              // Sabiendo que el máximo por fila es 4 y la separación (gap) es 4px:
-                              const puntosEnFila = Math.min(area.capacity, 4); 
+                              const puntosEnFila = Math.min(capacidadReal, 4); 
                               const anchoDeFila = (puntosEnFila - 1) * 4; 
-                              const startX = (area.x + area.w / 2) - (anchoDeFila / 2); // Calcula el centro exacto
+                              const startX = (area.x + area.w / 2) - (anchoDeFila / 2); 
 
                               return(
                                 <circle 
@@ -219,7 +318,6 @@ export default function DashboardApp({ onLogout }) {
                       })}
                     </svg>
 
-                    {/* Legend */}
                     <div style={{ display: "flex", gap: 20, marginTop: 16, justifyContent: "center" }}>
                       {[{ l: "Disponible", c: C.success }, { l: "Ocupado", c: C.danger }, { l: "Mantenimiento", c: C.warning }].map(({ l, c }) => (
                         <div key={l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.textMuted }}>
@@ -229,13 +327,12 @@ export default function DashboardApp({ onLogout }) {
                     </div>
                   </div>
 
-                  {/* Area Detail Panel */}
                   <div style={{ width: 300, borderRadius: 16, background: C.cardDark, padding: 24, border: `1px solid ${C.glassBorder}`, display: "flex", flexDirection: "column" }}>
                     {selectedArea ? (
                       <>
                         <h3 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{selectedArea.name}</h3>
                         <p style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Piso {selectedArea.floor}</p>
-                        <StatusBadge status={selectedArea.status} />
+                        <StatusBadge status={bdEspacios.find(e => e.codigo === selectedArea.id)?.estado_espacio || 'available'} />
                         <div style={{ margin: "20px 0", height: 1, background: "rgba(255,255,255,0.1)" }} />
                         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -248,7 +345,7 @@ export default function DashboardApp({ onLogout }) {
                           </div>
                         </div>
                         <div style={{ flex: 1 }} />
-                        {selectedArea.status === "available" ? (
+                        {(bdEspacios.find(e => e.codigo === selectedArea.id)?.estado_espacio || 'disponible') === "disponible" ? (
                           <BtnPrimary onClick={() => setReserveModal(selectedArea)} style={{ width: "100%", marginTop: 20 }}>Seleccionar</BtnPrimary>
                         ) : (
                           <BtnSecondary style={{ width: "100%", marginTop: 20, opacity: 0.5, cursor: "not-allowed" }}>No disponible</BtnSecondary>
@@ -264,27 +361,57 @@ export default function DashboardApp({ onLogout }) {
                   </div>
                 </div>
 
-                {/* Reserve Modal */}
+                {/* MODAL DE RESERVA */}
                 {reserveModal && (
-                  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={() => setReserveModal(null)}>
+                  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={cerrarModalYLimpiar}>
                     <div onClick={e => e.stopPropagation()} style={{ background: C.cardDark, borderRadius: 20, padding: 36, width: 480, border: `1px solid ${C.glassBorder}`, animation: "fadeUp 0.3s ease" }}>
-                      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Reservar</h2>
+                      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Reservar Espacio</h2>
                       <p style={{ fontSize: 14, color: C.textMuted, marginBottom: 24 }}>{reserveModal.name} — {reserveModal.type}</p>
+                      
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                        <InputField label="Nombre" value="Maria Gutiérrez" onChange={() => { }} />
-                        <InputField label="Número de empleado" value="EMP-20345" onChange={() => { }} />
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                           <span style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, fontWeight: 600 }}>Usuario</span>
+                           <div style={{ padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: `1px solid ${C.glassBorder}`, color: C.textMuted, fontSize: 14 }}>
+                             {userProfile.nombre} {userProfile.primer_apellido}
+                           </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                           <span style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, fontWeight: 600 }}>Capacidad Máxima</span>
+                           <div style={{ padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: `1px solid ${C.glassBorder}`, color: C.textMuted, fontSize: 14 }}>
+                             {bdEspacios.find(e => e.codigo === reserveModal.id)?.capacidad || reserveModal.capacity} Personas
+                           </div>
+                        </div>
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-                        <InputField label="Correo" value="maria@accenture.com" onChange={() => { }} />
-                        <InputField label="Número de personas" value="4" onChange={() => { }} />
+                      
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14, marginBottom: 14 }}>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                           <span style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, fontWeight: 600 }}>Número de asistentes (Tú incluido)</span>
+                           <input type="number" min="1" max={bdEspacios.find(e => e.codigo === reserveModal.id)?.capacidad || reserveModal.capacity} value={formReserva.asistentes} onChange={(e) => setFormReserva({...formReserva, asistentes: e.target.value})} style={{ padding: "10px 14px", background: "rgba(0,0,0,0.3)", borderRadius: 8, border: `1px solid ${C.glassBorder}`, color: "#fff", fontSize: 14, outline: "none" }} />
+                        </div>
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 24 }}>
-                        <InputField label="Fecha" type="date" value="2026-03-10" onChange={() => { }} />
-                        <InputField label="Hora inicio" type="time" value="09:00" onChange={() => { }} />
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                           <span style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, fontWeight: 600 }}>Fecha</span>
+                           <input type="date" value={formReserva.fecha_reserva} onChange={(e) => setFormReserva({...formReserva, fecha_reserva: e.target.value})} style={{ padding: "10px 14px", background: "rgba(0,0,0,0.3)", borderRadius: 8, border: `1px solid ${C.glassBorder}`, color: "#fff", fontSize: 14, outline: "none", colorScheme: "dark" }} />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                             <span style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, fontWeight: 600 }}>Hora Inicio</span>
+                             <input type="time" value={formReserva.hora_inicio} onChange={(e) => setFormReserva({...formReserva, hora_inicio: e.target.value})} style={{ padding: "10px 14px", background: "rgba(0,0,0,0.3)", borderRadius: 8, border: `1px solid ${C.glassBorder}`, color: "#fff", fontSize: 14, outline: "none", colorScheme: "dark" }} />
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                             <span style={{ fontSize: 12, color: C.textMuted, marginBottom: 4, fontWeight: 600 }}>Hora Fin</span>
+                             <input type="time" value={formReserva.hora_fin} onChange={(e) => setFormReserva({...formReserva, hora_fin: e.target.value})} style={{ padding: "10px 14px", background: "rgba(0,0,0,0.3)", borderRadius: 8, border: `1px solid ${C.glassBorder}`, color: "#fff", fontSize: 14, outline: "none", colorScheme: "dark" }} />
+                          </div>
+                        </div>
                       </div>
+                      
                       <div style={{ display: "flex", gap: 12 }}>
-                        <BtnPrimary onClick={() => setReserveModal(null)} style={{ flex: 1 }}>Reservar</BtnPrimary>
-                        <BtnSecondary onClick={() => setReserveModal(null)} style={{ flex: 0 }}>Volver</BtnSecondary>
+                        <BtnPrimary onClick={() => {if(!isReserving) handleConfirmReserve() }} style={{ flex: 1, opacity: isReserving ? 0.7 : 1 }}>
+                          {isReserving ? "Procesando..." : "Confirmar Reserva"}
+                        </BtnPrimary>
+                        <BtnSecondary onClick={cerrarModalYLimpiar} style={{ flex: 0 }}>Cancelar</BtnSecondary>
                       </div>
                     </div>
                   </div>
@@ -303,7 +430,6 @@ export default function DashboardApp({ onLogout }) {
                   </div>
                 </div>
 
-                {/* AI Banner */}
                 <div style={{ padding: 28, borderRadius: 16, marginBottom: 28, background: `linear-gradient(135deg, rgba(161,0,255,0.15), rgba(200,80,255,0.08))`, border: `1px solid ${C.glassBorder}`, position: "relative", overflow: "hidden" }}>
                   <div style={{ position: "absolute", top: -60, right: -60, width: 200, height: 200, borderRadius: "50%", background: `radial-gradient(circle, ${C.purple1}30 0%, transparent 70%)` }} />
                   <div style={{ position: "relative", zIndex: 1 }}>
@@ -321,7 +447,6 @@ export default function DashboardApp({ onLogout }) {
                   </div>
                 </div>
 
-                {/* Behavior Insights */}
                 <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Insights de Comportamiento</h2>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
                   {[
@@ -338,7 +463,6 @@ export default function DashboardApp({ onLogout }) {
                   ))}
                 </div>
 
-                {/* Recommendations */}
                 <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Recomendaciones Personalizadas</h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {aiRecommendations.map((rec, i) => {
@@ -415,7 +539,6 @@ export default function DashboardApp({ onLogout }) {
                   </div>
                 </div>
 
-                {/* Weekly Challenge */}
                 <div style={{ padding: 24, borderRadius: 14, background: C.glass, border: `1px solid ${C.glassBorder}`, marginBottom: 28, animation: "glow 3s ease infinite" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -434,7 +557,6 @@ export default function DashboardApp({ onLogout }) {
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-                  {/* Badges */}
                   <div>
                     <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Logros</h2>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
@@ -455,7 +577,6 @@ export default function DashboardApp({ onLogout }) {
                     </div>
                   </div>
 
-                  {/* Leaderboard */}
                   <div>
                     <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Tabla de Líderes</h2>
                     <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${C.glassBorder}`, background: C.glass }}>
@@ -488,6 +609,33 @@ export default function DashboardApp({ onLogout }) {
           </div>
         </main>
       </div>
+
+      {/* 🟢 ALERTAS FLOTANTES CORRECTAS */}
+      {floatAlert && (
+        <div style={{
+          position: "fixed",
+          bottom: 40,
+          right: 40,
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "16px 24px",
+          borderRadius: 16,
+          background: C.cardDark,
+          border: `1px solid ${floatAlert.type === "error" ? C.danger : C.success}`,
+          boxShadow: `0 10px 40px ${floatAlert.type === "error" ? C.danger : C.success}40`,
+          color: C.white,
+          fontSize: 14,
+          fontWeight: 600,
+          animation: "fadeUp 0.3s ease forwards",
+        }}>
+          <span style={{ fontSize: 20 }}>
+            {floatAlert.type === "error" ? "⚠️" : "✅"}
+          </span>
+          <span>{floatAlert.message}</span>
+        </div>
+      )}
     </div>
   );
 }

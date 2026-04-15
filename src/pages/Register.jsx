@@ -16,9 +16,12 @@ export default function RegisterScreen({ onRegister, onGoLogin }) {
     const [pw, setPw] = useState("");
     const [loading, setLoading] = useState(false); // Para mostrar que está cargando
     const [errorMsg, setErrorMsg] = useState(""); // Para mostrar errores
+    const [successMsg, setSuccessMsg] = useState(""); //Mensaje de exito en registro 
 
     // 1. CREAMOS LA FUNCIÓN DE REGISTRO
     const handleRegister = async () => {
+        setErrorMsg("");
+        setSuccessMsg("");
         // Validaciones básicas
         if (!email || !pw || !name || !lastname1 || !empNum) { //algunos empleados pueden venir del extranjero donde solo tienen un apellido por lo que solo se valida el primero
             setErrorMsg("Por favor, llena todos los campos.");
@@ -27,28 +30,27 @@ export default function RegisterScreen({ onRegister, onGoLogin }) {
 
         //validacion de email
         const emailLowerCase = email.trim().toLowerCase();
-        const isValidDomain = emailLower.endsWith("@accenture.com") || emailLower.endsWith("@tec.mx");
+        const isValidDomain = emailLowerCase.endsWith("@accenture.com") || emailLowerCase.endsWith("@tec.mx");
 
         if (!isValidDomain) {
             setErrorMsg("Correo Electronico Invalido, Por favor, use su correo corporativo válido");
             return;
         }
         setLoading(true);
-        setErrorMsg("");
-
+        
         try {
             // Llamada a Supabase
             const { data, error } = await supabase.auth.signUp({
-            email: email.trim(),
-            password: pw,
-            options: {
-                data: {
-                nombre: name,
-                primer_apellido: lastname1,
-                segundo_apellido: lastname2 || null,
-                numero_empleado: empNum // Lo guardamos en los metadatos de auth
+                email: email.trim(),
+                password: pw,
+                options: {
+                    data: {
+                    nombre: name,
+                    primer_apellido: lastname1,
+                    segundo_apellido: lastname2 || null,
+                    numero_empleado: empNum // Lo guardamos en los metadatos de auth
+                    }
                 }
-            }
             });
 
             if (error) throw error;
@@ -56,8 +58,10 @@ export default function RegisterScreen({ onRegister, onGoLogin }) {
             // Si llegamos aquí, el registro fue exitoso
             // Supabase por defecto requiere confirmar el correo, pero si lo desactivaste 
             // en tu panel (Email Confirmations -> Off), el usuario ya estará logueado.
-            onRegister(); 
-            
+            setSuccessMsg("¡Registro exitoso!. Redirigiendo a la página de inicio de sesión...");
+            setTimeout(() => {
+                onGoLogin(); // Redirige al login después de mostrar el mensaje de éxito
+            }, 2000); // Espera 2 segundos para que el usuario vea el mensaje            
         } catch (error) {
             setErrorMsg(error.message);
         } finally {
@@ -92,6 +96,21 @@ export default function RegisterScreen({ onRegister, onGoLogin }) {
                         {errorMsg && (
                             <div style={{ color: C.danger, fontSize: 13, marginBottom: 16, textAlign: "center", background: "rgba(248,113,113,0.1)", padding: 8, borderRadius: 8 }}>
                                 {errorMsg}
+                            </div>
+                        )}
+                        {/* Mostrar mensaje de éxito */}
+                        {successMsg && (
+                            <div style={{ 
+                                color: '#4ade80', 
+                                background: 'rgba(74, 222, 128, 0.1)', 
+                                padding: '12px', 
+                                borderRadius: '8px', 
+                                marginBottom: '16px', 
+                                fontSize: '14px', 
+                                textAlign: 'center',
+                                border: '1px solid rgba(74, 222, 128, 0.3)'
+                            }}>
+                                {successMsg}
                             </div>
                         )}
                         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
