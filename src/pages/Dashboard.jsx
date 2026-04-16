@@ -155,16 +155,20 @@ export default function DashboardApp({ onLogout }) {
 
       if(errorCrearReserva) throw errorCrearReserva;
 
-      // Si con esta reserva el área se llena para este momento, la marcamos en la DB
-      if (lugaresOcupados + lugaresSolicitados === capacidadReal) {
-        await supabase
-          .from("Espacio")
-          .update({ estado_espacio: 'ocupado', disponible: false })
-          .eq('id_espacio', espacioIdNumeric);
-      }
-
       ShowFloatAlert(`Reserva creada exitosamente para ${reserveModal.name}.`, "success");
       cerrarModalYLimpiar();
+
+      // Si con esta reserva el área se llena para este momento, la marcamos en la DB
+      if (lugaresOcupados + lugaresSolicitados === capacidadReal) {
+        supabase
+          .from("Espacio")
+          .update({ estado_espacio: 'ocupado', disponible: false })
+          .eq('id_espacio', espacioIdNumeric)
+          .then(({ error }) => {
+            if(error) console.error("La sala se llenó, pero falló la actualización en Espacio:", error);
+          });
+      }
+
       // Recargar datos en el mapa inmediatamente
       const {data} = await supabase.from("Espacio").select(`*, Reserva(*)`);
       if (data) setBDEspacios(data);

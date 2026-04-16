@@ -11,10 +11,10 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
   const [filter, setFilter] = useState("all");
   const [myReservations, setMyReservations] = useState([]);
   const [loadingRes, setLoadingRes] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false); // 🟢 Estado para el botón de refrescar
+  const [isRefreshing, setIsRefreshing] = useState(false); // Estado para el botón de refrescar
   const { userProfile } = useUser();
 
-  // 🟢 Función de fetch mejorada con manejo de errores y consola
+  // Función de fetch mejorada con manejo de errores y consola
   const fetchReservas = async (isManualRefresh = false) => {
     if (isManualRefresh) setIsRefreshing(true);
     else setLoadingRes(true);
@@ -52,16 +52,28 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
     const confirmar = window.confirm("¿Estás seguro de que deseas cancelar esta reservación?");
     if (!confirmar) return;
     setLoadingRes(true);
-    const { error } = await supabase
-      .from("Reserva")
-      .update({ id_estado: 4 }) //Reserva cancelada
-      .eq("id_reserva", idReserva);
-    if (error) {
-      console.error("Error cancelando reserva:", error.message);
-      alert("No se pudo cancelar la reservación. Intenta de nuevo.");
-      setLoadingRes(false);
-    } else {
+    try {
+      // Agregamos .select() para obligar a Supabase a decirnos si realmente cambió algo
+      const { data, error } = await supabase
+        .from("Reserva")
+        .update({ id_estado: 4 }) 
+        .eq("id_reserva", idReserva)
+        .select();
+
+      if (error) throw error;
+
+      // Si data está vacío, es un fallo silencioso de RLS (Permisos de BD)
+      if (!data || data.length === 0) {
+         throw new Error("Supabase bloqueó el UPDATE (Verifica tus políticas de RLS para la tabla Reserva).");
+      }
+
       fetchReservas();
+    } catch (e) {
+      console.error("Error cancelando reserva:", e);
+      alert(`No se pudo cancelar: ${e.message}`);
+    } finally {
+      // Garantizamos que la tabla siempre se destrabe, haya error o no.
+      setLoadingRes(false);
     }
   };
   const filteredRes = myReservations.filter(r => {
