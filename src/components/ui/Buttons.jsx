@@ -12,12 +12,13 @@ export const BtnPrimary = ({ children, onClick, style = {}, disabled = false }) 
   }}>{children}</button>
 );
 
-export const BtnSecondary = ({ children, onClick, style = {} }) => (
-  <button onClick={onClick} style={{
+export const BtnSecondary = ({ children, onClick, style = {}, disabled = false }) => (
+  <button onClick={onClick} disabled={disabled} style={{
     display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
     padding: "12px 32px", borderRadius: 8,
     border: `1px solid ${C.glassBorder}`, background: "rgba(255,255,255,0.05)",
-    color: C.text, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-    transition: "all 0.2s", ...style,
+    color: C.text, fontSize: 14, fontWeight: 600,
+    cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit",
+    opacity: disabled ? 0.5 : 1, transition: "all 0.2s", ...style,
   }}>{children}</button>
 );

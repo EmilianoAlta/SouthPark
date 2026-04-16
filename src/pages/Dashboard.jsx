@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
-import React, { useState, useEffect } from "react";
-import { C, aiRecommendations, floorAreas, gamificationData } from "../config/constants";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { C, aiRecommendations, floorAreas as floorAreasMock, gamificationData } from "../config/constants";
 import { Logo, Icons } from "../components/ui/Icons";
 import { BtnPrimary, BtnSecondary } from "../components/ui/Buttons";
 import { StatusBadge, PulseDot, ConfidenceMeter, XPBar } from "../components/ui/Widgets";
@@ -10,6 +10,7 @@ import { useUser } from "../context/UserContext";
 import ReservationsView from "../components/ReservationsView";
 import ProfileView from "../components/ProfileView";
 import { supabase } from "../supabaseClient";
+import { parseConflictoError, motivoToMensaje } from "../lib/reserveErrors";
 
 export default function DashboardApp({ onLogout }) {
   const [screen, setScreen] = useState("areas");
@@ -53,24 +54,89 @@ export default function DashboardApp({ onLogout }) {
     setReserveModal(null);
     setFormReserva({ fecha_reserva: "", hora_inicio: "", hora_fin: "", asistentes: "" });
     setIsReserving(false);
+    setConflictPreview(null);
   };
 
-  useEffect(() => { 
-    if(screen === "areas"){
-      const fetchEspaciosYReservas = async () => {
-        const {data, error} = await supabase
-        .from("Espacio")
-        .select(`*, Reserva(id_reserva, asistentes, id_estado, fecha_reserva, hora_inicio, hora_fin)`);
-        
-        if (!error && data) setBDEspacios(data);
-        else console.error("Error trayendo el mapa:", error);
-      };
-      fetchEspaciosYReservas();
+  const fetchEspaciosYReservas = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("Espacio")
+      .select(`*, Zona ( piso, nombre_zona ), Reserva(id_reserva, asistentes, id_estado, fecha_reserva, hora_inicio, hora_fin)`);
+    if (!error && data) setBDEspacios(data);
+    else if (error) console.error("Error trayendo el mapa:", error);
+  }, []);
+
+  useEffect(() => {
+    if (screen === "areas") fetchEspaciosYReservas();
+    setAnimateIn(false);
+    const t = setTimeout(() => setAnimateIn(true), 50);
+    return () => clearTimeout(t);
+  }, [screen, fetchEspaciosYReservas]);
+
+  // 🟢 Realtime: refresca el mapa cuando cambia Reserva o Espacio
+  useEffect(() => {
+    if (screen !== "areas") return;
+    const channel = supabase
+      .channel("dashboard-reservas-espacios")
+      .on("postgres_changes", { event: "*", schema: "public", table: "Reserva" },
+          () => fetchEspaciosYReservas())
+      .on("postgres_changes", { event: "*", schema: "public", table: "Espacio" },
+          () => fetchEspaciosYReservas())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [screen, fetchEspaciosYReservas]);
+
+  // 🟢 Preview de conflicto en vivo (HU-4.4)
+  const [conflictPreview, setConflictPreview] = useState(null);
+  const conflictTimerRef = useRef(null);
+  useEffect(() => {
+    if (!reserveModal) { setConflictPreview(null); return; }
+    const { fecha_reserva, hora_inicio, hora_fin, asistentes } = formReserva;
+    if (!fecha_reserva || !hora_inicio || !hora_fin || !asistentes) {
+      setConflictPreview(null);
+      return;
     }
-    setAnimateIn(false); 
-    const t = setTimeout(() => setAnimateIn(true), 50); 
-    return () => clearTimeout(t); 
-  }, [screen]);
+    if (hora_inicio >= hora_fin) {
+      setConflictPreview({ hay_conflicto: true, motivo: "rango_invalido" });
+      return;
+    }
+    const espacio = bdEspacios.find(e => e.codigo === reserveModal.id);
+    const espacioId = reserveModal.dbId || espacio?.id_espacio;
+    if (!espacioId) return;
+
+    if (conflictTimerRef.current) clearTimeout(conflictTimerRef.current);
+    conflictTimerRef.current = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("existe_conflicto_reserva", {
+        p_id_espacio:    parseInt(espacioId),
+        p_fecha_reserva: fecha_reserva,
+        p_hora_inicio:   `${hora_inicio}:00`,
+        p_hora_fin:      `${hora_fin}:00`,
+        p_asistentes:    parseInt(asistentes),
+      });
+      if (!error && Array.isArray(data) && data.length > 0) {
+        setConflictPreview(data[0]);
+      }
+    }, 400);
+    return () => conflictTimerRef.current && clearTimeout(conflictTimerRef.current);
+  }, [formReserva, reserveModal, bdEspacios]);
+
+  // floorAreas reales: construidas desde Espacio + Zona. Si la DB no trae geometría, caemos al mock.
+  const floorAreas = bdEspacios.length > 0
+    ? bdEspacios
+        .filter(e => e.Zona?.piso === selectedFloor)
+        .map(e => ({
+          id: e.codigo,
+          dbId: e.id_espacio,
+          name: e.codigo ? `Area ${e.codigo.replace(/^area/i, "")}` : `Espacio ${e.id_espacio}`,
+          x: Number(e.coord_x ?? 5),
+          y: Number(e.coord_y ?? 5),
+          w: Number(e.ancho ?? 20),
+          h: Number(e.alto ?? 20),
+          capacity: e.capacidad,
+          floor: e.Zona?.piso ?? selectedFloor,
+          type: e.tipo || "Espacio",
+          status: e.estado_espacio || "disponible",
+        }))
+    : floorAreasMock.filter(a => a.floor === selectedFloor);
 
   if (!userProfile) return null;
 
@@ -95,88 +161,47 @@ export default function DashboardApp({ onLogout }) {
       return;
     }
 
-    //Obtener el ID numérico correcto del espacio
+    // Obtener el ID numérico correcto del espacio
     const espacioReal = bdEspacios.find(e => e.codigo === reserveModal.id);
     const espacioIdNumeric = reserveModal.dbId || espacioReal?.id_espacio;
-
-    //Obtener la capacidad real del espacio
-    const capacidadReal = espacioReal?.capacidad || reserveModal.capacity;
     if (!espacioIdNumeric) {
       ShowFloatAlert("Error: No se pudo verificar la identidad de la sala en la base de datos.", "error");
       return;
     }
 
     setIsReserving(true);
-    try{
-      const {data: reservasExistentes, error: errorReservas} = await supabase
-        .from("Reserva")
-        .select('hora_inicio, hora_fin, asistentes')
-        .eq('id_espacio', espacioIdNumeric)
-        .eq('fecha_reserva', formReserva.fecha_reserva)
-        .in('id_estado', [1, 2, 3]); 
+    try {
+      // RPC: valida conflicto + capacidad server-side, loguea intentos fallidos,
+      // y el trigger trg_reserva_actualiza_espacio se encarga del estado del Espacio.
+      const { error } = await supabase.rpc("crear_reserva", {
+        p_id_espacio:    parseInt(espacioIdNumeric),
+        p_fecha_reserva: formReserva.fecha_reserva,
+        p_hora_inicio:   `${formReserva.hora_inicio}:00`,
+        p_hora_fin:      `${formReserva.hora_fin}:00`,
+        p_asistentes:    parseInt(formReserva.asistentes),
+        p_notas:         null,
+      });
 
-      if(errorReservas) throw errorReservas;
-
-      // 1. Filtramos todas las reservas que chocan con nuestro horario
-      const reservasEnConflicto = reservasExistentes?.filter(r => {
-        const startA = formReserva.hora_inicio;
-        const endA = formReserva.hora_fin;
-        const startB = r.hora_inicio.slice(0,5);
-        const endB = r.hora_fin.slice(0,5);
-        // Hay choque si nuestro inicio es antes de su fin, Y nuestro fin es después de su inicio
-        return (startA < endB && endA > startB); 
-      }) || [];
-
-      // 2. Sumamos los asistentes de las reservas que chocan
-      const lugaresOcupados = reservasEnConflicto?.filter(r => {
-        return (formReserva.hora_inicio < r.hora_fin && formReserva.hora_fin > r.hora_inicio);
-      }).reduce((s, r) => s + r.asistentes, 0) || 0;
-
-      const lugaresSolicitados = parseInt(formReserva.asistentes);
-
-      // 3. Verificamos si hay espacio suficiente
-      if (lugaresOcupados + lugaresSolicitados > capacidadReal) {
-        const lugaresRestantes = Math.max(0, capacidadReal - lugaresOcupados);
-        ShowFloatAlert(`Sin cupo suficiente. Solo quedan ${lugaresRestantes} lugares disponibles en ese horario.`, "error");
-        setIsReserving(false);
+      if (error) {
+        const parsed = parseConflictoError(error);
+        if (parsed) {
+          ShowFloatAlert(motivoToMensaje(parsed.motivo, parsed.lugares_restantes), "error");
+        } else {
+          ShowFloatAlert(`Error: ${error.message || "No se pudo crear la reserva."}`, "error");
+        }
         return;
       }
 
-      // 🟢 GUARDADO DE RESERVA
-      const { error: errorCrearReserva } = await supabase.from('Reserva').insert({
-        id_usuario: userProfile.id_usuario,
-        id_espacio: parseInt(espacioIdNumeric), // Usamos el numérico aquí
-        fecha_reserva: formReserva.fecha_reserva,
-        hora_inicio: `${formReserva.hora_inicio}:00`,
-        hora_fin: `${formReserva.hora_fin}:00`,
-        id_estado: 1, 
-        asistentes: lugaresSolicitados
-      });
-
-      if(errorCrearReserva) throw errorCrearReserva;
-
       ShowFloatAlert(`Reserva creada exitosamente para ${reserveModal.name}.`, "success");
       cerrarModalYLimpiar();
-
-      // Si con esta reserva el área se llena para este momento, la marcamos en la DB
-      if (lugaresOcupados + lugaresSolicitados === capacidadReal) {
-        supabase
-          .from("Espacio")
-          .update({ estado_espacio: 'ocupado', disponible: false })
-          .eq('id_espacio', espacioIdNumeric)
-          .then(({ error }) => {
-            if(error) console.error("La sala se llenó, pero falló la actualización en Espacio:", error);
-          });
-      }
-
-      // Recargar datos en el mapa inmediatamente
-      const {data} = await supabase.from("Espacio").select(`*, Reserva(*)`);
-      if (data) setBDEspacios(data);
+      // El canal realtime refrescará bdEspacios automáticamente; añadimos un fetch
+      // inmediato como respaldo en caso de que Realtime no esté habilitado en el proyecto.
+      fetchEspaciosYReservas();
 
     } catch(error){
       console.error("Error creando reserva:", error);
       ShowFloatAlert(`Error: ${error.message || "Error al conectar con la base de datos."}`, "error");
-    } finally{
+    } finally {
       setIsReserving(false);
     }
   }
@@ -411,8 +436,30 @@ export default function DashboardApp({ onLogout }) {
                         </div>
                       </div>
                       
+                      {/* Banner de preview de conflicto (HU-4.4) */}
+                      {conflictPreview && (
+                        <div style={{
+                          padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13,
+                          border: `1px solid ${conflictPreview.hay_conflicto ? C.danger : C.success}`,
+                          background: `${conflictPreview.hay_conflicto ? C.danger : C.success}15`,
+                          color: conflictPreview.hay_conflicto ? C.danger : C.success,
+                          display: "flex", alignItems: "center", gap: 8,
+                        }}>
+                          <span style={{ fontSize: 16 }}>{conflictPreview.hay_conflicto ? "⚠️" : "✅"}</span>
+                          <span style={{ lineHeight: 1.4 }}>
+                            {conflictPreview.hay_conflicto
+                              ? motivoToMensaje(conflictPreview.motivo, Math.max(0, conflictPreview.lugares_restantes))
+                              : `Horario disponible. Quedan ${conflictPreview.lugares_restantes} lugares libres después de tu reserva.`}
+                          </span>
+                        </div>
+                      )}
+
                       <div style={{ display: "flex", gap: 12 }}>
-                        <BtnPrimary onClick={() => {if(!isReserving) handleConfirmReserve() }} style={{ flex: 1, opacity: isReserving ? 0.7 : 1 }}>
+                        <BtnPrimary
+                          onClick={() => { if(!isReserving && !conflictPreview?.hay_conflicto) handleConfirmReserve() }}
+                          disabled={isReserving || conflictPreview?.hay_conflicto}
+                          style={{ flex: 1, opacity: (isReserving || conflictPreview?.hay_conflicto) ? 0.5 : 1 }}
+                        >
                           {isReserving ? "Procesando..." : "Confirmar Reserva"}
                         </BtnPrimary>
                         <BtnSecondary onClick={cerrarModalYLimpiar} style={{ flex: 0 }}>Cancelar</BtnSecondary>

@@ -4,6 +4,7 @@ import { C } from "../config/constants";
 import { Icons } from "./ui/Icons";
 import { BtnPrimary } from "./ui/Buttons";
 import { StatusBadge } from "./ui/Widgets";
+import ConfirmModal from "./ui/ConfirmModal";
 import { supabase } from "../supabaseClient";
 import { useUser } from "../context/UserContext";
 
@@ -12,7 +13,15 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
   const [myReservations, setMyReservations] = useState([]);
   const [loadingRes, setLoadingRes] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false); // Estado para el botón de refrescar
+  const [confirmCancel, setConfirmCancel] = useState(null); // id_reserva a cancelar
+  const [cancelling, setCancelling] = useState(false);
+  const [toast, setToast] = useState(null); // {message, type}
   const { userProfile } = useUser();
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   // Función de fetch mejorada con manejo de errores y consola
   const fetchReservas = async (isManualRefresh = false) => {
@@ -48,32 +57,33 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
       fetchReservas();
     }
   }, [userProfile]);
-  const cancelarReserva = async (idReserva) => {
-    const confirmar = window.confirm("¿Estás seguro de que deseas cancelar esta reservación?");
-    if (!confirmar) return;
-    setLoadingRes(true);
+  const ejecutarCancelacion = async () => {
+    if (!confirmCancel) return;
+    const idReserva = confirmCancel;
+    setCancelling(true);
     try {
-      // Agregamos .select() para obligar a Supabase a decirnos si realmente cambió algo
-      const { data, error } = await supabase
-        .from("Reserva")
-        .update({ id_estado: 4 }) 
-        .eq("id_reserva", idReserva)
-        .select();
+      // RPC: valida ownership/admin + estado + setea fecha_cancelacion + actualiza Gamificacion
+      const { data, error } = await supabase.rpc("cancelar_reserva", {
+        p_id_reserva: idReserva,
+      });
 
       if (error) throw error;
+      if (!data) throw new Error("La reserva no se pudo cancelar.");
 
-      // Si data está vacío, es un fallo silencioso de RLS (Permisos de BD)
-      if (!data || data.length === 0) {
-         throw new Error("Supabase bloqueó el UPDATE (Verifica tus políticas de RLS para la tabla Reserva).");
-      }
-
+      setConfirmCancel(null);
+      showToast("Reserva cancelada correctamente.", "success");
       fetchReservas();
     } catch (e) {
       console.error("Error cancelando reserva:", e);
-      alert(`No se pudo cancelar: ${e.message}`);
+      const msg = e.message?.includes("No autorizado")
+        ? "No tienes permiso para cancelar esta reserva."
+        : e.message?.includes("ya está")
+        ? "La reserva ya está cancelada o finalizada."
+        : e.message || "Error desconocido al cancelar.";
+      showToast(`No se pudo cancelar: ${msg}`, "error");
+      setConfirmCancel(null);
     } finally {
-      // Garantizamos que la tabla siempre se destrabe, haya error o no.
-      setLoadingRes(false);
+      setCancelling(false);
     }
   };
   const filteredRes = myReservations.filter(r => {
@@ -115,6 +125,33 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
           <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", color: filter === f.id ? "#fff" : C.textMuted, background: filter === f.id ? C.purple1 : "rgba(255,255,255,0.06)", transition: "all 0.2s" }}>{f.l}</button>
         ))}
       </div>
+
+      <ConfirmModal
+        open={confirmCancel !== null}
+        title="Cancelar reserva"
+        message="¿Seguro que deseas cancelar esta reservación? Esta acción no se puede deshacer y el espacio quedará disponible para otros usuarios."
+        confirmText="Sí, cancelar"
+        cancelText="Volver"
+        danger
+        busy={cancelling}
+        onConfirm={ejecutarCancelacion}
+        onCancel={() => !cancelling && setConfirmCancel(null)}
+      />
+
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 40, right: 40, zIndex: 9999,
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "16px 24px", borderRadius: 16, background: C.cardDark,
+          border: `1px solid ${toast.type === "error" ? C.danger : C.success}`,
+          boxShadow: `0 10px 40px ${toast.type === "error" ? C.danger : C.success}40`,
+          color: C.white, fontSize: 14, fontWeight: 600,
+          animation: "fadeUp 0.3s ease forwards",
+        }}>
+          <span style={{ fontSize: 20 }}>{toast.type === "error" ? "⚠️" : "✅"}</span>
+          <span>{toast.message}</span>
+        </div>
+      )}
 
       <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${C.glassBorder}`, background: C.glass }}>
         {loadingRes ? (
@@ -161,8 +198,8 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
                   {/* Boton para cancelar reserva */}
                   <td style={{ padding: "14px 16px", textAlign: "right"}}>
                     {(r.id_estado === 1 || r.id_estado === 3) && ( //solo se pueden cancelar las reservas confirmadas o pendientes
-                      <button 
-                        onClick={() => cancelarReserva(r.id_reserva)}
+                      <button
+                        onClick={() => setConfirmCancel(r.id_reserva)}
                         style={{ background: "rgba(255,50,50,0.1)", color: C.danger, border: `1px solid ${C.danger}40`, padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700, transition: "all 0.2s" }}
                         onMouseEnter={e => e.currentTarget.style.background = "rgba(255,50,50,0.2)"}
                         onMouseLeave={e => e.currentTarget.style.background = "rgba(255,50,50,0.1)"}
