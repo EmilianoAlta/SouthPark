@@ -48,12 +48,29 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
       fetchReservas();
     }
   }, [userProfile]);
-
+  const cancelarReserva = async (idReserva) => {
+    const confirmar = window.confirm("¿Estás seguro de que deseas cancelar esta reservación?");
+    if (!confirmar) return;
+    setLoadingRes(true);
+    const { error } = await supabase
+      .from("Reserva")
+      .update({ id_estado: 4 }) //Reserva cancelada
+      .eq("id_reserva", idReserva);
+    if (error) {
+      console.error("Error cancelando reserva:", error.message);
+      alert("No se pudo cancelar la reservación. Intenta de nuevo.");
+      setLoadingRes(false);
+    } else {
+      fetchReservas();
+    }
+  };
   const filteredRes = myReservations.filter(r => {
     if (filter === "all") return true;
     if (filter === "confirmed" && r.id_estado === 1) return true;
     if (filter === "active" && r.id_estado === 2) return true;
     if (filter === "pending" && r.id_estado === 3) return true;
+    if (filter === "cancelled" && r.id_estado === 4) return true;
+    if (filter === "finished" && r.id_estado === 5) return true;
     return false;
   });
 
@@ -77,7 +94,12 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {[{ id: "all", l: "Todas" }, { id: "confirmed", l: "Confirmadas" }, { id: "active", l: "Activas" }, { id: "pending", l: "Pendientes" }].map(f => (
+        {[{ id: "all", l: "Todas" }, 
+          { id: "pending", l: "Pendientes" }, 
+          { id: "confirmed", l: "Confirmadas" }, 
+          { id: "active", l: "Activas" }, 
+          { id: "finished", l: "Finalizadas" },
+          { id: "cancelled", l: "Canceladas" }].map(f => (
           <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", color: filter === f.id ? "#fff" : C.textMuted, background: filter === f.id ? C.purple1 : "rgba(255,255,255,0.06)", transition: "all 0.2s" }}>{f.l}</button>
         ))}
       </div>
@@ -116,7 +138,26 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
                   </td>
                   <td style={{ padding: "14px 16px", fontSize: 13 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}>{Icons.users} {r.asistentes}</div></td>
                   <td style={{ padding: "14px 16px" }}>
-                    <StatusBadge status={r.id_estado === 1 ? "confirmed" : r.id_estado === 2 ? "active" : "pending"} />
+                    <StatusBadge status={
+                      r.id_estado === 1 ? "confirmed" : 
+                      r.id_estado === 2 ? "active" : 
+                      r.id_estado === 3 ? "pending" : 
+                      r.id_estado === 4 ? "cancelled" : 
+                      r.id_estado === 5 ? "finished" : "unknown"
+                    } />
+                  </td>
+                  {/* Boton para cancelar reserva */}
+                  <td style={{ padding: "14px 16px", textAlign: "right"}}>
+                    {(r.id_estado === 1 || r.id_estado === 3) && ( //solo se pueden cancelar las reservas confirmadas o pendientes
+                      <button 
+                        onClick={() => cancelarReserva(r.id_reserva)}
+                        style={{ background: "rgba(255,50,50,0.1)", color: C.danger, border: `1px solid ${C.danger}40`, padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 700, transition: "all 0.2s" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "rgba(255,50,50,0.2)"}
+                        onMouseLeave={e => e.currentTarget.style.background = "rgba(255,50,50,0.1)"}
+                      >
+                        Cancelar
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

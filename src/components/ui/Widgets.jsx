@@ -13,6 +13,7 @@ export const StatusBadge = ({ status }) => {
     available: { l: "Disponible", c: C.success, bg: "rgba(74,222,128,0.12)" },
     occupied: { l: "Ocupado", c: C.danger, bg: "rgba(248,113,113,0.12)" },
     maintenance: { l: "Mantenimiento", c: C.warning, bg: "rgba(251,191,36,0.12)" },
+    finished: { l: "Finalizada", c: C.textMuted, bg: "rgba(255,255,255,0.06)" },
   };
   const s = m[status] || m.pending;
   return (
