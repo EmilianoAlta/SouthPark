@@ -8,6 +8,8 @@ export const UserProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let activo = true;
+
     // Función para obtener el perfil desde tu tabla pública "Usuario"
     const fetchProfile = async (userId) => {
       const { data, error } = await supabase
@@ -16,21 +18,39 @@ export const UserProvider = ({ children }) => {
         .eq('id_usuario', userId)
         .single();
 
+      if (!activo) return;
       if (!error) setUserProfile(data);
+      else setUserProfile(null);
       setLoading(false);
     };
 
-    // Escuchar cambios en la sesión de Supabase
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Sesión inicial (evita depender de INITIAL_SESSION dentro del callback,
+    // que puede deadlockear si hay awaits mientras Realtime toma el lock del cliente).
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!activo) return;
       if (session) {
-        await fetchProfile(session.user.id);
+        fetchProfile(session.user.id);
       } else {
         setUserProfile(null);
         setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Escuchar cambios posteriores (login/logout). No usar await aquí.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!activo) return;
+      if (session) {
+        fetchProfile(session.user.id);
+      } else {
+        setUserProfile(null);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      activo = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
