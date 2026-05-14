@@ -23,17 +23,27 @@ declare
     v_usuario   uuid := auth.uid();
     v_conflicto record;
     v_reserva   public."Reserva";
+    
+    -- 🟢 1. SACAMOS LA HORA ACTUAL EXACTA DE MONTERREY
+    v_hoy       date := (now() at time zone 'America/Monterrey')::date;
+    v_ahora     time := (now() at time zone 'America/Monterrey')::time;
 begin
     if v_usuario is null then
         raise exception 'No autenticado' using errcode = '28000';
     end if;
 
     if p_hora_inicio >= p_hora_fin then
-        raise exception 'hora_inicio debe ser anterior a hora_fin' using errcode = '22023';
+        raise exception 'La hora de inicio debe ser anterior a la hora de fin' using errcode = '22023';
     end if;
 
     if p_asistentes <= 0 then
-        raise exception 'asistentes debe ser > 0' using errcode = '22023';
+        raise exception 'El número de asistentes debe ser mayor a 0' using errcode = '22023';
+    end if;
+
+    -- 🟢 2. EL ESCUDO ANTI-VIAJES EN EL TIEMPO
+    -- Si intentan reservar ayer, o si intentan reservar hoy pero en una hora que ya pasó (como las 12:00 AM)
+    if p_fecha_reserva < v_hoy or (p_fecha_reserva = v_hoy and p_hora_inicio < v_ahora) then
+        raise exception 'No puedes hacer una reserva en el pasado. Verifica la fecha y hora.' using errcode = 'P0001';
     end if;
 
     select * into v_conflicto
@@ -58,7 +68,7 @@ begin
         asistentes, id_estado, notas)
     values (
         v_usuario, p_id_espacio, p_fecha_reserva, p_hora_inicio, p_hora_fin,
-        p_asistentes, 3, p_notas)
+        p_asistentes, 3, p_notas)  -- 3 = pendiente (requiere check-in)
     returning * into v_reserva;
 
     return v_reserva;
@@ -66,7 +76,6 @@ end;
 $$;
 
 grant execute on function public.crear_reserva(bigint, date, time, time, smallint, text) to authenticated;
-
 -- ============================================================================
 -- 2. finalizar_reservas_vencidas → maneja pendientes sin check-in (no-show)
 -- ============================================================================

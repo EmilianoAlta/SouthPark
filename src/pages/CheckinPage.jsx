@@ -16,19 +16,21 @@ const getCheckinWindowInfo = (reserva) => {
   if (!reserva || reserva.id_estado !== 3) return { dentro: false, falta: null };
 
   const ahora = new Date();
-  const [ih, im] = reserva.hora_inicio.split(":").map(Number);
 
-  const inicio = new Date(ahora);
-  inicio.setHours(ih, im, 0, 0);
+  // Construir el timestamp exacto con fecha_reserva + hora_inicio
+  const [fy, fm, fd] = reserva.fecha_reserva.split("-").map(Number);
+  const [ih, im]     = reserva.hora_inicio.split(":").map(Number);
+  const inicio = new Date(fy, fm - 1, fd, ih, im, 0, 0);
 
-  const limite = new Date(inicio.getTime() + 10 * 60 * 1000);
+  // Ventana: abre 15 min antes, cierra 10 min después (alineado con el SQL)
+  const abre   = new Date(inicio.getTime() - 15 * 60 * 1000);
+  const cierra = new Date(inicio.getTime() + 10 * 60 * 1000);
 
-  if (ahora < inicio) {
-    const diffMs = inicio - ahora;
-    const diffMin = Math.ceil(diffMs / 60000);
+  if (ahora < abre) {
+    const diffMin = Math.ceil((abre - ahora) / 60000);
     return { dentro: false, falta: `${diffMin} min` };
   }
-  if (ahora > limite) {
+  if (ahora > cierra) {
     return { dentro: false, falta: null, expirada: true };
   }
   return { dentro: true };
