@@ -17,11 +17,6 @@ import FloorEditor from "../components/FloorEditor";
 // Mapeo de pisos a imágenes de planos reales y etiquetas
 const FLOOR_CONFIG = {
   1: { label: "PB",     img: "/floors/piso-pb.png" },
-  2: { label: "MZ",     img: "/floors/piso-mz.png" },
-  3: { label: "Piso 3", img: "/floors/piso-3.png"  },
-  4: { label: "Piso 9", img: "/floors/piso-9.png"  },
-  5: { label: "Piso 5", img: null },
-  6: { label: "Piso 6", img: null },
 };
 
 export default function DashboardApp({ onLogout }) {
@@ -384,15 +379,18 @@ export default function DashboardApp({ onLogout }) {
                     <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 4 }}>Areas Disponibles</h1>
                     <p style={{ fontSize: 14, color: C.textMuted }}>Ocupación en tiempo real: {fechaHoyStr} | {horaActualStr.slice(0,5)}</p>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ fontSize: 13, color: C.textMuted }}>Piso</span>
-                    <select value={selectedFloor} onChange={e => setSelectedFloor(+e.target.value)} style={{
-                      padding: "8px 16px", borderRadius: 8, border: `1px solid ${C.glassBorder}`,
-                      background: "rgba(161,0,255,0.12)", color: C.text, fontSize: 14, fontFamily: "inherit", cursor: "pointer",
-                    }}>
-                      {Object.entries(FLOOR_CONFIG).map(([f, cfg]) => <option key={f} value={f} style={{ background: "#1a0a1e" }}>{cfg.label}</option>)}
-                    </select>
-                  </div>
+                  {/* Selector de piso: se muestra solo si hay más de un piso configurado */}
+                  {Object.keys(FLOOR_CONFIG).length > 1 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 13, color: C.textMuted }}>Piso</span>
+                      <select value={selectedFloor} onChange={e => setSelectedFloor(+e.target.value)} style={{
+                        padding: "8px 16px", borderRadius: 8, border: `1px solid ${C.glassBorder}`,
+                        background: "rgba(161,0,255,0.12)", color: C.text, fontSize: 14, fontFamily: "inherit", cursor: "pointer",
+                      }}>
+                        {Object.entries(FLOOR_CONFIG).map(([f, cfg]) => <option key={f} value={f} style={{ background: "#1a0a1e" }}>{cfg.label}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "flex", gap: 24 }}>
