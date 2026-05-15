@@ -17,6 +17,9 @@ import FloorEditor from "../components/FloorEditor";
 // Mapeo de pisos a imágenes de planos reales y etiquetas
 const FLOOR_CONFIG = {
   1: { label: "PB",     img: "/floors/piso-pb.png" },
+  2: { label: "MZ",     img: "/floors/piso-mz.png" },
+  3: { label: "Piso 3", img: "/floors/piso-3.png" },
+  4: { label: "Piso 9", img: "/floors/piso-9.png" },
 };
 
 export default function DashboardApp({ onLogout }) {
