@@ -177,7 +177,10 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
                   <td style={{ padding: "14px 16px", fontSize: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <span style={{ fontSize: 16 }}>🏢</span>
-                      <span style={{ fontWeight: 700 }}>{r.Espacio?.codigo || `Espacio ${r.id_espacio}`}</span>
+                      <div>
+                        <span style={{ fontWeight: 700 }}>{r.Espacio?.tipo || "Espacio"}</span>
+                        <span style={{ fontSize: 11, color: C.textMuted, marginLeft: 6 }}>{r.Espacio?.codigo || ""}</span>
+                      </div>
                     </div>
                   </td>
                   <td style={{ padding: "14px 16px", fontSize: 13, color: C.textMuted }}>{r.Espacio?.tipo || "General"}</td>

@@ -2,7 +2,7 @@
 
 Bitácora del estado del proyecto. Actualizar al cerrar cada avance.
 
-_Última actualización: 2026-05-14 — Sprint 3: Recomendaciones IA reales, Check-in/out con QR, liberación automática, plano real por pisos_
+_Última actualización: 2026-05-14 — Sprint 3: Planos arquitectónicos reales con áreas clickeables alineadas, códigos de espacio reales, recomendaciones IA (GPT-4o-mini)_
 
 ---
 
@@ -104,6 +104,12 @@ _Última actualización: 2026-05-14 — Sprint 3: Recomendaciones IA reales, Che
 - [x] Dashboard filtra `floorAreas` desde `Espacio` + `Zona.piso` (pisos 1-6 poblados).
 - [x] Selector de piso funcional — filtra áreas por piso seleccionado.
 - [x] Coordenadas SVG (`coord_x, coord_y, ancho, alto`) backfilled en DB para todos los espacios.
+- [x] **Planos arquitectónicos reales** — PDFs convertidos a PNG (`public/floors/piso-pb.png`, `piso-mz.png`, `piso-3.png`, `piso-9.png`) y renderizados como fondo SVG con `<image>`.
+- [x] **`FLOOR_CONFIG`** mapea pisos a etiquetas reales (PB, MZ, Piso 3, Piso 9) e imágenes.
+- [x] **Códigos reales de espacio** — Actualización de `Espacio.codigo` y `tipo` para los 25 espacios de pisos 1-4 con nomenclatura real del edificio (PBSJ-076, MZSJ-115, ICSJ-3040, SJ-9087, etc.).
+- [x] **Coordenadas alineadas al plano** — `coord_x/y/ancho/alto` recalculados para que los rectángulos clickeables coincidan con las áreas reales del plano arquitectónico.
+- [x] **Zonas renombradas** — PB-Planta Baja, MZ-Mezzanine, Piso 3-Innovación, Piso 9-Colaboración.
+- [x] Texto adaptativo en SVG — tamaño de fuente proporcional al ancho del área.
 
 ### Sprint 3 — Liberación automática de espacios
 - [x] `finalizar_reservas_vencidas()` — pg_cron cada minuto marca reservas expiradas (id_estado=5).
@@ -210,9 +216,10 @@ Leyenda: ✅ cerrada | 🟡 parcial | 🔵 activa | ⚪ pendiente
 ### Visualización de plano real por pisos — Sergio Rodríguez · **Closed** ✅
 | Tarea | Estado |
 |-------|--------|
-| Implementar renderizado del plano | ✅ Dashboard filtra desde Espacio+Zona |
-| Mapear y mostrar espacios con coordenadas | ✅ coord_x/y/ancho/alto desde DB |
+| Implementar renderizado del plano | ✅ Dashboard filtra desde Espacio+Zona con planos PNG reales de fondo |
+| Mapear y mostrar espacios con coordenadas | ✅ coord_x/y/ancho/alto alineados a planos arquitectónicos reales |
 | Integrar navegación o trigger para iniciar reserva | ✅ Click en área → panel → modal |
+| Códigos y nombres reales de espacios | ✅ PBSJ-076, MZSJ-115, ICSJ-3040, SJ-9087, etc. |
 | Pruebas de visualización por piso | ✅ |
 | Pruebas de cambio de piso | ✅ |
 

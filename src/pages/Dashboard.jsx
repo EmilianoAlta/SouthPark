@@ -13,6 +13,16 @@ import { supabase } from "../supabaseClient";
 import { parseConflictoError, motivoToMensaje } from "../lib/reserveErrors";
 import { obtenerRecomendaciones } from "../lib/recommendations";
 
+// Mapeo de pisos a imágenes de planos reales y etiquetas
+const FLOOR_CONFIG = {
+  1: { label: "PB",     img: "/floors/piso-pb.png" },
+  2: { label: "MZ",     img: "/floors/piso-mz.png" },
+  3: { label: "Piso 3", img: "/floors/piso-3.png"  },
+  4: { label: "Piso 9", img: "/floors/piso-9.png"  },
+  5: { label: "Piso 5", img: null },
+  6: { label: "Piso 6", img: null },
+};
+
 export default function DashboardApp({ onLogout }) {
   const [screen, setScreen] = useState("areas");
   const [animateIn, setAnimateIn] = useState(false);
@@ -138,7 +148,7 @@ export default function DashboardApp({ onLogout }) {
         .map(e => ({
           id: e.codigo,
           dbId: e.id_espacio,
-          name: e.codigo ? `Area ${e.codigo.replace(/^area/i, "")}` : `Espacio ${e.id_espacio}`,
+          name: e.codigo || `Espacio ${e.id_espacio}`,
           x: Number(e.coord_x ?? 5),
           y: Number(e.coord_y ?? 5),
           w: Number(e.ancho ?? 20),
@@ -204,7 +214,7 @@ export default function DashboardApp({ onLogout }) {
         return;
       }
 
-      ShowFloatAlert(`Reserva creada exitosamente para ${reserveModal.name}.`, "success");
+      ShowFloatAlert(`Reserva creada exitosamente para ${reserveModal.type} (${reserveModal.name}).`, "success");
       cerrarModalYLimpiar();
       // El canal realtime refrescará bdEspacios automáticamente; añadimos un fetch
       // inmediato como respaldo en caso de que Realtime no esté habilitado en el proyecto.
@@ -285,18 +295,26 @@ export default function DashboardApp({ onLogout }) {
                       padding: "8px 16px", borderRadius: 8, border: `1px solid ${C.glassBorder}`,
                       background: "rgba(161,0,255,0.12)", color: C.text, fontSize: 14, fontFamily: "inherit", cursor: "pointer",
                     }}>
-                      {[1, 2, 3, 4, 5, 6].map(f => <option key={f} value={f} style={{ background: "#1a0a1e" }}>Piso {f}</option>)}
+                      {Object.entries(FLOOR_CONFIG).map(([f, cfg]) => <option key={f} value={f} style={{ background: "#1a0a1e" }}>{cfg.label}</option>)}
                     </select>
                   </div>
                 </div>
 
                 <div style={{ display: "flex", gap: 24 }}>
                   <div style={{ flex: 1, borderRadius: 16, border: `2px solid ${C.glassBorder}`, background: "rgba(0,0,0,0.6)", padding: 20, position: "relative", overflow: "hidden" }}>
-                    <div style={{ position: "absolute", top: 16, left: 20, fontSize: 12, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", zIndex: 2 }}>Piso {selectedFloor}</div>
-                    <svg viewBox="0 0 100 82" style={{ width: "100%", height: "auto" }}>
-                      <path d="M 3 5 L 97 5 L 97 28 L 95 28 L 95 80 L 5 80 L 5 28 L 3 28 Z" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.4" />
-                      {[20, 40, 60, 80].map(y => <line key={`h${y}`} x1="3" y1={y * 0.82} x2="97" y2={y * 0.82} stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
-                      {[20, 40, 60, 80].map(x => <line key={`v${x}`} x1={x} y1="5" x2={x} y2="80" stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
+                    <div style={{ position: "absolute", top: 16, left: 20, fontSize: 12, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", zIndex: 2 }}>{FLOOR_CONFIG[selectedFloor]?.label || `Piso ${selectedFloor}`}</div>
+                    <svg viewBox="0 0 100 71" style={{ width: "100%", height: "auto" }}>
+                      {/* Plano real como fondo */}
+                      {FLOOR_CONFIG[selectedFloor]?.img && (
+                        <image href={FLOOR_CONFIG[selectedFloor].img} x="0" y="0" width="100" height="71" preserveAspectRatio="xMidYMid meet" style={{ opacity: 0.9 }} />
+                      )}
+                      {!FLOOR_CONFIG[selectedFloor]?.img && (
+                        <>
+                          <path d="M 3 5 L 97 5 L 97 28 L 95 28 L 95 68 L 5 68 L 5 28 L 3 28 Z" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.4" />
+                          {[20, 40, 60].map(y => <line key={`h${y}`} x1="3" y1={y * 0.71} x2="97" y2={y * 0.71} stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
+                          {[20, 40, 60, 80].map(x => <line key={`v${x}`} x1={x} y1="5" x2={x} y2="68" stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
+                        </>
+                      )}
                       {floorAreas.map(area => {
                         const espacioBD = bdEspacios.find(e => e.codigo === area.id);
                         const capacidadReal = espacioBD ? espacioBD.capacidad : area.capacity;
@@ -322,38 +340,15 @@ export default function DashboardApp({ onLogout }) {
                         const boxStatus = isMaintenance ? 'maintenance' : (asistentesAhora >= capacidadReal ? 'occupied' : 'available')
                         return(
                           <g key={area.id} onClick={() => setSelectedArea({...area, dbId: espacioBD?.id_espacio})} style={{ cursor: "pointer" }}>
-                            <rect x={area.x} y={area.y} width={area.w} height={area.h} rx="1.5"
-                              fill={selectedArea?.id === area.id ? `${areaStatusColor(boxStatus)}30` : `${areaStatusColor(boxStatus)}15`}
-                              stroke={selectedArea?.id === area.id ? areaStatusColor(boxStatus) : `${areaStatusColor(boxStatus)}60`}
-                              strokeWidth={selectedArea?.id === area.id ? "0.6" : "0.3"}
+                            <rect x={area.x} y={area.y} width={area.w} height={area.h} rx="1"
+                              fill={selectedArea?.id === area.id ? `${areaStatusColor(boxStatus)}50` : `${areaStatusColor(boxStatus)}25`}
+                              stroke={selectedArea?.id === area.id ? areaStatusColor(boxStatus) : `${areaStatusColor(boxStatus)}90`}
+                              strokeWidth={selectedArea?.id === area.id ? "0.5" : "0.25"}
                               style={{ transition: "all 0.3s" }}
                             />
-                            <text x={area.x + area.w / 2} y={area.y + area.h / 2 - 2} textAnchor="middle" fill={C.white} fontSize="2.8" fontWeight="700" fontFamily="inherit">{area.name}</text>
-                            <text x={area.x + area.w / 2} y={area.y + area.h / 2 + 4} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="2" fontFamily="inherit">{area.type}</text>
-                            {Array.from({ length: Math.min(capacidadReal, 8) }).map((_, di) => {
-
-                              let dotColor = C.success; 
-                              if (isMaintenance) {
-                                dotColor = C.warning; 
-                              } else if (di < asistentesAhora) {
-                                dotColor = C.danger; 
-                              }
-
-                              const puntosEnFila = Math.min(capacidadReal, 4); 
-                              const anchoDeFila = (puntosEnFila - 1) * 4; 
-                              const startX = (area.x + area.w / 2) - (anchoDeFila / 2); 
-
-                              return(
-                                <circle 
-                                  key={di} 
-                                  cx={startX + (di % 4) * 4} 
-                                  cy={area.y + area.h - 4 + Math.floor(di / 4) * 3} 
-                                  r="0.8"
-                                  fill={dotColor}
-                                  style={{ transition: "fill 0.3s ease"}}
-                                />
-                              );
-                            })}
+                            {/* Nombre del espacio — tamaño adaptado al area */}
+                            <text x={area.x + area.w / 2} y={area.y + area.h / 2 - 0.5} textAnchor="middle" fill={C.white} fontSize={Math.min(1.8, area.w / 6)} fontWeight="700" fontFamily="inherit" style={{ textShadow: "0 0 4px rgba(0,0,0,0.9)", pointerEvents: "none" }}>{area.type}</text>
+                            <text x={area.x + area.w / 2} y={area.y + area.h / 2 + 1.8} textAnchor="middle" fill="rgba(255,255,255,0.7)" fontSize={Math.min(1.3, area.w / 8)} fontFamily="inherit" style={{ textShadow: "0 0 3px rgba(0,0,0,0.9)", pointerEvents: "none" }}>{area.name}</text>
                           </g>
                         );
                       })}
@@ -371,8 +366,9 @@ export default function DashboardApp({ onLogout }) {
                   <div style={{ width: 300, borderRadius: 16, background: C.cardDark, padding: 24, border: `1px solid ${C.glassBorder}`, display: "flex", flexDirection: "column" }}>
                     {selectedArea ? (
                       <>
-                        <h3 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{selectedArea.name}</h3>
-                        <p style={{ fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Piso {selectedArea.floor}</p>
+                        <h3 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{selectedArea.type}</h3>
+                        <p style={{ fontSize: 13, color: C.textMuted, marginBottom: 4 }}>{selectedArea.name}</p>
+                        <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 16 }}>{FLOOR_CONFIG[selectedArea.floor]?.label || `Piso ${selectedArea.floor}`}</p>
                         <StatusBadge status={bdEspacios.find(e => e.codigo === selectedArea.id)?.estado_espacio || 'available'} />
                         <div style={{ margin: "20px 0", height: 1, background: "rgba(255,255,255,0.1)" }} />
                         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -407,7 +403,7 @@ export default function DashboardApp({ onLogout }) {
                   <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={cerrarModalYLimpiar}>
                     <div onClick={e => e.stopPropagation()} style={{ background: C.cardDark, borderRadius: 20, padding: 36, width: 480, border: `1px solid ${C.glassBorder}`, animation: "fadeUp 0.3s ease" }}>
                       <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Reservar Espacio</h2>
-                      <p style={{ fontSize: 14, color: C.textMuted, marginBottom: 24 }}>{reserveModal.name} — {reserveModal.type}</p>
+                      <p style={{ fontSize: 14, color: C.textMuted, marginBottom: 24 }}>{reserveModal.type} — {reserveModal.name}</p>
                       
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
                         <div style={{ display: "flex", flexDirection: "column" }}>
