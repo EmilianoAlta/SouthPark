@@ -408,10 +408,10 @@ export default function DashboardApp({ onLogout }) {
                         if (isOccupiedByAdmin) {
                           asistentesAhora = capacidadReal; 
                         } else {
-                          const reservasActivas = espacioBD?.Reserva?.filter(r => 
-                            (r.id_estado === 1 || r.id_estado === 2) && 
+                          const reservasActivas = espacioBD?.Reserva?.filter(r =>
+                            (r.id_estado === 1 || r.id_estado === 2 || r.id_estado === 3) &&
                             r.fecha_reserva === fechaHoyStr &&
-                            horaActualStr >= r.hora_inicio && horaActualStr < r.hora_fin // < en vez de <= para evitar overlap de horas exactas
+                            horaActualStr >= r.hora_inicio && horaActualStr < r.hora_fin
                           ) || [];
                           
                           // Sumamos los asistentes de todas las reservas que están corriendo en este segundo
