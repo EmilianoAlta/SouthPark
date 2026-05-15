@@ -215,39 +215,24 @@ export default function DashboardApp({ onLogout }) {
     return () => conflictTimerRef.current && clearTimeout(conflictTimerRef.current);
   }, [formReserva, reserveModal, bdEspacios]);
 
-  // floorAreas reales: construidas desde Espacio + Zona, acomodadas en grid automático.
-  const floorAreas = (() => {
-    const items = bdEspacios.length > 0
-      ? bdEspacios
-          .filter(e => e.Zona?.piso === selectedFloor)
-          .map(e => ({
-            id: e.codigo,
-            dbId: e.id_espacio,
-            name: e.codigo || `Espacio ${e.id_espacio}`,
-            capacity: e.capacidad,
-            floor: e.Zona?.piso ?? selectedFloor,
-            type: e.tipo || "Espacio",
-            status: e.estado_espacio || "disponible",
-          }))
-      : floorAreasMock.filter(a => a.floor === selectedFloor).map(a => ({ ...a }));
-
-    // Grid automático: acomodar en filas limpias
-    const cols = items.length <= 4 ? 2 : items.length <= 6 ? 3 : items.length <= 9 ? 3 : 4;
-    const rows = Math.ceil(items.length / cols);
-    const pad = 3;
-    const gapX = 2;
-    const gapY = 2;
-    const cellW = (100 - pad * 2 - gapX * (cols - 1)) / cols;
-    const cellH = (66 - pad - gapY * (rows - 1)) / rows;
-
-    return items.map((item, i) => ({
-      ...item,
-      x: pad + (i % cols) * (cellW + gapX),
-      y: pad + Math.floor(i / cols) * (cellH + gapY),
-      w: cellW,
-      h: cellH,
-    }));
-  })();
+  // floorAreas reales: coordenadas desde la DB (editadas en el Editor de Plano).
+  const floorAreas = bdEspacios.length > 0
+    ? bdEspacios
+        .filter(e => e.Zona?.piso === selectedFloor)
+        .map(e => ({
+          id: e.codigo,
+          dbId: e.id_espacio,
+          name: e.codigo || `Espacio ${e.id_espacio}`,
+          x: Number(e.coord_x ?? 5),
+          y: Number(e.coord_y ?? 5),
+          w: Number(e.ancho ?? 20),
+          h: Number(e.alto ?? 20),
+          capacity: e.capacidad,
+          floor: e.Zona?.piso ?? selectedFloor,
+          type: e.tipo || "Espacio",
+          status: e.estado_espacio || "disponible",
+        }))
+    : floorAreasMock.filter(a => a.floor === selectedFloor);
 
   if (!userProfile) return null;
 
@@ -397,10 +382,17 @@ export default function DashboardApp({ onLogout }) {
                   <div style={{ flex: 1, borderRadius: 16, border: `2px solid ${C.glassBorder}`, background: "rgba(0,0,0,0.6)", padding: 20, position: "relative", overflow: "hidden" }}>
                     <div style={{ position: "absolute", top: 16, left: 20, fontSize: 12, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", zIndex: 2 }}>{FLOOR_CONFIG[selectedFloor]?.label || `Piso ${selectedFloor}`}</div>
                     <svg viewBox="0 0 100 71" style={{ width: "100%", height: "auto" }}>
-                      {/* Grid de fondo sutil */}
-                      <rect x="0" y="0" width="100" height="71" fill="transparent" />
-                      {[20, 40, 60, 80].map(x => <line key={`v${x}`} x1={x} y1="0" x2={x} y2="71" stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
-                      {[18, 36, 54].map(y => <line key={`h${y}`} x1="0" y1={y} x2="100" y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
+                      {/* Plano real como fondo */}
+                      {FLOOR_CONFIG[selectedFloor]?.img && (
+                        <image href={FLOOR_CONFIG[selectedFloor].img} x="0" y="0" width="100" height="71" preserveAspectRatio="xMidYMid meet" style={{ opacity: 0.85 }} />
+                      )}
+                      {!FLOOR_CONFIG[selectedFloor]?.img && (
+                        <>
+                          <rect x="0" y="0" width="100" height="71" fill="transparent" />
+                          {[20, 40, 60, 80].map(x => <line key={`v${x}`} x1={x} y1="0" x2={x} y2="71" stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
+                          {[18, 36, 54].map(y => <line key={`h${y}`} x1="0" y1={y} x2="100" y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="0.2" />)}
+                        </>
+                      )}
                       {floorAreas.map(area => {
                         const espacioBD = bdEspacios.find(e => e.codigo === area.id);
                         const capacidadReal = espacioBD ? espacioBD.capacidad : area.capacity;
