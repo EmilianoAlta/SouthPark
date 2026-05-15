@@ -12,6 +12,7 @@ import ProfileView from "../components/ProfileView";
 import { supabase } from "../supabaseClient";
 import { parseConflictoError, motivoToMensaje } from "../lib/reserveErrors";
 import { obtenerRecomendaciones } from "../lib/recommendations";
+import FloorEditor from "../components/FloorEditor";
 
 // Mapeo de pisos a imágenes de planos reales y etiquetas
 const FLOOR_CONFIG = {
@@ -64,13 +65,91 @@ export default function DashboardApp({ onLogout }) {
   const min = String(hoy.getMinutes()).padStart(2, '0');
   const horaActualStr = `${hh}:${min}:00`;
   
+  // ── Bloqueo temporal (6 min countdown) ──
+  const [countdown, setCountdown] = useState(0); // segundos restantes
+  const [bloqueoId, setBloqueoId] = useState(null);
+  const countdownRef = useRef(null);
+  const BLOQUEO_DURACION = 360; // 6 minutos en segundos
+
+  // ── Reservas del día para el área seleccionada (timeline) ──
+  const [areaReservasHoy, setAreaReservasHoy] = useState([]);
+
+  useEffect(() => {
+    if (!selectedArea) { setAreaReservasHoy([]); return; }
+    const espacio = bdEspacios.find(e => e.codigo === selectedArea.id);
+    if (!espacio) return;
+    // Traer reservas del espacio para hoy
+    supabase
+      .from("Reserva")
+      .select("hora_inicio, hora_fin, asistentes, id_estado")
+      .eq("id_espacio", espacio.id_espacio)
+      .eq("fecha_reserva", fechaHoyStr)
+      .in("id_estado", [1, 2, 3])
+      .order("hora_inicio")
+      .then(({ data }) => setAreaReservasHoy(data || []));
+  }, [selectedArea, bdEspacios, fechaHoyStr]);
+
+  // Crear bloqueo al abrir modal
+  const crearBloqueo = async (espacioId) => {
+    try {
+      const { data, error } = await supabase
+        .from("BloqueoReserva")
+        .insert({
+          id_espacio: espacioId,
+          id_usuario: userProfile.id_usuario,
+          fecha_reserva: fechaHoyStr,
+          hora_inicio: "00:00",
+          hora_fin: "23:59",
+        })
+        .select("id_bloqueo")
+        .single();
+      if (!error && data) setBloqueoId(data.id_bloqueo);
+    } catch (e) { console.warn("Bloqueo no creado:", e); }
+  };
+
+  // Eliminar bloqueo
+  const eliminarBloqueo = async () => {
+    if (!bloqueoId) return;
+    await supabase.from("BloqueoReserva").delete().eq("id_bloqueo", bloqueoId);
+    setBloqueoId(null);
+  };
+
+  // Iniciar countdown al abrir modal
+  const abrirModalReserva = (area) => {
+    setReserveModal(area);
+    setCountdown(BLOQUEO_DURACION);
+    const espacio = bdEspacios.find(e => e.codigo === area.id);
+    if (espacio) crearBloqueo(espacio.id_espacio);
+  };
+
+  // Countdown timer
+  useEffect(() => {
+    if (!reserveModal || countdown <= 0) return;
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current);
+          // Expiró: cerrar modal
+          cerrarModalYLimpiarInterno();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(countdownRef.current);
+  }, [reserveModal, countdown > 0]);
+
   // funcion para limpiar el modal de reserva
-  const cerrarModalYLimpiar = () => {
+  const cerrarModalYLimpiarInterno = () => {
     setReserveModal(null);
     setFormReserva({ fecha_reserva: "", hora_inicio: "", hora_fin: "", asistentes: "" });
     setIsReserving(false);
     setConflictPreview(null);
+    setCountdown(0);
+    clearInterval(countdownRef.current);
+    eliminarBloqueo();
   };
+  const cerrarModalYLimpiar = cerrarModalYLimpiarInterno;
 
   const fetchEspaciosYReservas = useCallback(async () => {
     const { data, error } = await supabase
@@ -186,6 +265,7 @@ export default function DashboardApp({ onLogout }) {
     { id: "ai", icon: Icons.sparkle, label: "IA Recomendaciones" },
     { id: "gamification", icon: Icons.trophy, label: "Gamificación" },
     { id: "profile", icon: Icons.user, label: "Perfil" },
+    ...(userProfile.id_rol === 1 ? [{ id: "floor-editor", icon: Icons.edit, label: "Editor de Plano" }] : []),
   ];
 
   const handleConfirmReserve = async () => {
@@ -389,9 +469,42 @@ export default function DashboardApp({ onLogout }) {
                             <span style={{ fontSize: 13, fontWeight: 600 }}>{selectedArea.capacity} personas</span>
                           </div>
                         </div>
+
+                        {/* Timeline de reservas del día */}
+                        <div style={{ margin: "16px 0", height: 1, background: "rgba(255,255,255,0.1)" }} />
+                        <div style={{ marginBottom: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Reservas hoy</span>
+                        </div>
+                        {areaReservasHoy.length === 0 ? (
+                          <p style={{ fontSize: 12, color: C.textMuted, opacity: 0.6 }}>Sin reservas para hoy</p>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 120, overflowY: "auto" }}>
+                            {areaReservasHoy.map((rv, i) => (
+                              <div key={i} style={{
+                                display: "flex", alignItems: "center", gap: 8,
+                                padding: "6px 10px", borderRadius: 8,
+                                background: rv.id_estado === 2 ? "rgba(96,165,250,0.12)" : "rgba(248,113,113,0.10)",
+                                border: `1px solid ${rv.id_estado === 2 ? C.blue : C.danger}30`,
+                              }}>
+                                <div style={{
+                                  width: 6, height: 6, borderRadius: "50%",
+                                  background: rv.id_estado === 2 ? C.blue : C.danger,
+                                  flexShrink: 0,
+                                }} />
+                                <span style={{ fontSize: 12, fontWeight: 600, color: C.white }}>
+                                  {String(rv.hora_inicio).slice(0,5)} - {String(rv.hora_fin).slice(0,5)}
+                                </span>
+                                <span style={{ fontSize: 11, color: C.textMuted, marginLeft: "auto" }}>
+                                  {rv.asistentes}p
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         <div style={{ flex: 1 }} />
                         {(bdEspacios.find(e => e.codigo === selectedArea.id)?.estado_espacio || 'disponible') === "disponible" ? (
-                          <BtnPrimary onClick={() => setReserveModal(selectedArea)} style={{ width: "100%", marginTop: 20 }}>Seleccionar</BtnPrimary>
+                          <BtnPrimary onClick={() => abrirModalReserva(selectedArea)} style={{ width: "100%", marginTop: 20 }}>Seleccionar</BtnPrimary>
                         ) : (
                           <BtnSecondary style={{ width: "100%", marginTop: 20, opacity: 0.5, cursor: "not-allowed" }}>No disponible</BtnSecondary>
                         )}
@@ -410,7 +523,39 @@ export default function DashboardApp({ onLogout }) {
                 {reserveModal && (
                   <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={cerrarModalYLimpiar}>
                     <div onClick={e => e.stopPropagation()} style={{ background: C.cardDark, borderRadius: 20, padding: 36, width: 480, border: `1px solid ${C.glassBorder}`, animation: "fadeUp 0.3s ease" }}>
-                      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Reservar Espacio</h2>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                        <h2 style={{ fontSize: 22, fontWeight: 800 }}>Reservar Espacio</h2>
+                        {/* Countdown timer */}
+                        {countdown > 0 && (
+                          <div style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "6px 14px", borderRadius: 10,
+                            background: countdown <= 60 ? "rgba(248,113,113,0.15)" : "rgba(161,0,255,0.12)",
+                            border: `1px solid ${countdown <= 60 ? C.danger : C.purple1}40`,
+                          }}>
+                            <div style={{
+                              width: 24, height: 24, borderRadius: "50%", position: "relative",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}>
+                              <svg width="24" height="24" viewBox="0 0 24 24" style={{ transform: "rotate(-90deg)" }}>
+                                <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2.5" />
+                                <circle cx="12" cy="12" r="10" fill="none"
+                                  stroke={countdown <= 60 ? C.danger : C.purple1}
+                                  strokeWidth="2.5" strokeLinecap="round"
+                                  strokeDasharray={`${(countdown / BLOQUEO_DURACION) * 62.83} 62.83`}
+                                  style={{ transition: "stroke-dasharray 1s linear" }}
+                                />
+                              </svg>
+                            </div>
+                            <span style={{
+                              fontSize: 14, fontWeight: 700, fontFamily: "JetBrains Mono, monospace",
+                              color: countdown <= 60 ? C.danger : C.white,
+                            }}>
+                              {String(Math.floor(countdown / 60)).padStart(2, "0")}:{String(countdown % 60).padStart(2, "0")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                       <p style={{ fontSize: 14, color: C.textMuted, marginBottom: 24 }}>{reserveModal.type} — {reserveModal.name}</p>
                       
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
@@ -690,6 +835,10 @@ export default function DashboardApp({ onLogout }) {
                   </div>
                 </div>
               </div>
+            )}
+
+            {screen === "floor-editor" && userProfile.id_rol === 1 && (
+              <FloorEditor animateIn={animateIn} />
             )}
 
           </div>
