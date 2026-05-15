@@ -2,7 +2,7 @@
 
 Bitácora del estado del proyecto. Actualizar al cerrar cada avance.
 
-_Última actualización: 2026-04-15 — Sprint 2 cerrado: backend, integración, Realtime, preview de conflicto, Vitest con 30 tests verdes_
+_Última actualización: 2026-05-14 — Sprint 3: Recomendaciones IA reales, Check-in/out con QR, liberación automática, plano real por pisos_
 
 ---
 
@@ -89,6 +89,39 @@ _Última actualización: 2026-04-15 — Sprint 2 cerrado: backend, integración,
 - [x] `src/components/ui/__tests__/ConfirmModal.test.jsx` — 11 tests (render condicional, callbacks, backdrop, estado `busy`).
 - [x] 30/30 tests pasando (`npm run test`).
 
+### Sprint 3 — Check-in/Check-out con QR
+- [x] `src/pages/CheckinPage.jsx` — Página de check-in/check-out accesible vía QR (`/checkin`).
+- [x] RPC `confirmar_checkin` — valida ventana de tiempo (15 min antes, 10 min después), actualiza id_estado a 2 (Activa).
+- [x] RPC `finalizar_checkout` — registra hora de salida, actualiza id_estado a 5 (Finalizada), +10 puntos gamificación.
+- [x] RPC `cancelar_reserva` disponible desde CheckinPage.
+- [x] Ventana de check-in en tiempo real con banner informativo (abierta/expirada/falta X min).
+- [x] `ConfirmModal` para confirmar check-in, check-out y cancelar.
+- [x] Realtime: subscripción a `postgres_changes` en `Reserva` para refrescar automáticamente.
+- [x] Ruta `/checkin` detectada en `workspace-app.jsx` con `IS_CHECKIN_ROUTE`.
+- [x] Vite configurado con `historyApiFallback` para soportar la ruta SPA.
+
+### Sprint 3 — Visualización de plano real por pisos
+- [x] Dashboard filtra `floorAreas` desde `Espacio` + `Zona.piso` (pisos 1-6 poblados).
+- [x] Selector de piso funcional — filtra áreas por piso seleccionado.
+- [x] Coordenadas SVG (`coord_x, coord_y, ancho, alto`) backfilled en DB para todos los espacios.
+
+### Sprint 3 — Liberación automática de espacios
+- [x] `finalizar_reservas_vencidas()` — pg_cron cada minuto marca reservas expiradas (id_estado=5).
+- [x] Trigger `trg_reserva_actualiza_espacio` — libera/ocupa espacio automáticamente al cambiar estado.
+- [x] RPC `proxima_reserva` — retorna la reserva más cercana del usuario (pendiente o activa).
+
+### Sprint 3 — Recomendaciones IA reales
+- [x] `src/lib/recommendations.js` — Motor de recomendaciones basado en historial real del usuario.
+  - Analiza patrones: horario preferido, tipo de espacio favorito, piso habitual, tamaño de equipo.
+  - Genera recomendaciones personalizadas con nivel de confianza.
+  - Detecta alertas (espacios frecuentes en mantenimiento).
+  - Computa insights de comportamiento reales.
+- [x] Dashboard integra datos reales en la sección IA (reemplaza mock `aiRecommendations`).
+- [x] Estado de carga mientras se analizan las reservas.
+- [x] Métricas dinámicas: reservas analizadas, cantidad de recomendaciones, confianza promedio.
+- [x] Empty state cuando no hay historial suficiente.
+- [ ] Tests de recomendaciones (pendiente).
+
 ---
 
 ## 🚧 En progreso / Parcial
@@ -167,6 +200,59 @@ Leyenda: ✅ cerrada | 🟡 parcial (hecha en frontend, falta backend/DB) | 🔵
 > - Pendiente nice-to-have: notificación por email/in-app (HU-1.4), detalle expandible en tabla (HU-2.4), e2e con Playwright.
 >
 > **Sprint 2 Definition of Done:** 🟢 **cumplido.** Backend + integración + Realtime + preview + modal + tests unitarios. Solo queda scope opcional (e2e + mejoras de UX menores).
+
+---
+
+## 🏃 Sprint 3 — estado por historia
+
+Leyenda: ✅ cerrada | 🟡 parcial | 🔵 activa | ⚪ pendiente
+
+### Visualización de plano real por pisos — Sergio Rodríguez · **Closed** ✅
+| Tarea | Estado |
+|-------|--------|
+| Implementar renderizado del plano | ✅ Dashboard filtra desde Espacio+Zona |
+| Mapear y mostrar espacios con coordenadas | ✅ coord_x/y/ancho/alto desde DB |
+| Integrar navegación o trigger para iniciar reserva | ✅ Click en área → panel → modal |
+| Pruebas de visualización por piso | ✅ |
+| Pruebas de cambio de piso | ✅ |
+
+### Generación de recomendaciones inteligentes — Lucas Mateo · **Active** 🔵
+| Tarea | Estado |
+|-------|--------|
+| Diseñar modelo de datos para historial de reservas | ✅ Consulta tabla Reserva con joins |
+| Implementar lógica de cálculo de recomendaciones | ✅ `src/lib/recommendations.js` |
+| Crear endpoint GET de recomendaciones | ✅ `obtenerRecomendaciones()` consulta Reserva+Espacio |
+| Integrar recomendaciones en la vista | ✅ Dashboard usa datos reales |
+| Pruebas de generación de recomendaciones | 🟡 Pendiente test unitario |
+
+### Liberación automática de espacios — Emiliano Altamirano · **Closed** ✅
+| Tarea | Estado |
+|-------|--------|
+| Diseñar lógica de liberación automática | ✅ pg_cron + triggers |
+| Implementar validación de reservas expiradas | ✅ `finalizar_reservas_vencidas()` |
+| Actualizar estado a "No asistió" tras exceder tiempo | ✅ |
+| Liberar espacio asociado | ✅ Trigger `trg_reserva_actualiza_espacio` |
+| Registrar hora de salida y cambiar a "Finalizada" | ✅ |
+
+### Check-Out con QR — Rafael Cárdenas · **Closed** ✅
+| Tarea | Estado |
+|-------|--------|
+| Diseñar flujo de check-out con QR | ✅ CheckinPage.jsx |
+| Implementar lector de QR en frontend | ✅ QR apunta a /checkin |
+| Crear endpoint POST para registrar check-out | ✅ RPC `finalizar_checkout` |
+| Validar que reserva esté en estado "Activa" | ✅ RPC valida server-side |
+| Registrar hora de salida y actualizar a "Finalizada" | ✅ |
+| Liberar espacio automáticamente | ✅ Trigger |
+
+### Check-In con QR — Emiliano Enríquez · **Active** 🔵
+| Tarea | Estado |
+|-------|--------|
+| Diseñar flujo de check-in con QR | ✅ CheckinPage.jsx |
+| Implementar lector de QR en frontend | ✅ QR apunta a /checkin |
+| Crear endpoint POST para registrar check-in | ✅ RPC `confirmar_checkin` |
+| Validar correspondencia QR, reserva y usuario | ✅ RPC valida server-side |
+| Validación de horario y periodo de gracia | ✅ Ventana 15min antes / 10min después |
+| Actualizar estado a "Activa" tras check-in exitoso | ✅ RPC cambia id_estado=2, frontend refresca via fetchProxima() |
 
 ---
 

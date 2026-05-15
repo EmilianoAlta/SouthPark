@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { C, aiRecommendations, floorAreas as floorAreasMock, gamificationData } from "../config/constants";
+import { C, floorAreas as floorAreasMock, gamificationData } from "../config/constants";
 import { Logo, Icons } from "../components/ui/Icons";
 import { BtnPrimary, BtnSecondary } from "../components/ui/Buttons";
 import { StatusBadge, PulseDot, ConfidenceMeter, XPBar } from "../components/ui/Widgets";
@@ -11,6 +11,7 @@ import ReservationsView from "../components/ReservationsView";
 import ProfileView from "../components/ProfileView";
 import { supabase } from "../supabaseClient";
 import { parseConflictoError, motivoToMensaje } from "../lib/reserveErrors";
+import { obtenerRecomendaciones } from "../lib/recommendations";
 
 export default function DashboardApp({ onLogout }) {
   const [screen, setScreen] = useState("areas");
@@ -23,6 +24,10 @@ export default function DashboardApp({ onLogout }) {
   const [bdEspacios, setBDEspacios] = useState([]);
   const [expandedRec, setExpandedRec] = useState(null);
   const [floatAlert, setFloatAlert] = useState(null);
+
+  // IA Recomendaciones — datos reales
+  const [iaData, setIaData] = useState(null);
+  const [iaLoading, setIaLoading] = useState(false);
 
   const ShowFloatAlert = (message, type = "success") => {
     setFloatAlert({message, type});
@@ -67,6 +72,13 @@ export default function DashboardApp({ onLogout }) {
 
   useEffect(() => {
     if (screen === "areas") fetchEspaciosYReservas();
+    if (screen === "ai" && !iaData && userProfile) {
+      setIaLoading(true);
+      obtenerRecomendaciones(userProfile.id_usuario)
+        .then((data) => setIaData(data))
+        .catch((e) => console.error("Error cargando recomendaciones:", e))
+        .finally(() => setIaLoading(false));
+    }
     setAnimateIn(false);
     const t = setTimeout(() => setAnimateIn(true), 50);
     return () => clearTimeout(t);
@@ -485,71 +497,90 @@ export default function DashboardApp({ onLogout }) {
                   <div style={{ position: "absolute", top: -60, right: -60, width: 200, height: 200, borderRadius: "50%", background: `radial-gradient(circle, ${C.purple1}30 0%, transparent 70%)` }} />
                   <div style={{ position: "relative", zIndex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                      <PulseDot /><span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.pink }}>Motor de IA Activo</span>
+                      <PulseDot /><span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.pink }}>{iaData?.usandoGPT ? "GPT-4o-mini Activo" : "Motor de IA Activo"}</span>
                     </div>
                     <p style={{ fontSize: 15, lineHeight: 1.7, color: C.text, maxWidth: 700, marginBottom: 20 }}>
-                      El sistema analiza continuamente tu comportamiento de uso — horarios preferidos, tipos de espacios, patrones de equipo y niveles de ocupación — para generar recomendaciones inteligentes.
+                      El sistema analiza tu historial de reservas — horarios preferidos, tipos de espacios, patrones de equipo y niveles de ocupación — para generar recomendaciones personalizadas.
                     </p>
                     <div style={{ display: "flex", gap: 32 }}>
-                      {[{ l: "Sesiones analizadas", v: "247" }, { l: "Precisión del modelo", v: "91%" }, { l: "Ahorro de tiempo", v: "3.2h/sem" }].map((m, i) => (
+                      {[
+                        { l: "Reservas analizadas", v: iaData ? String(iaData.totalReservasAnalizadas) : "—" },
+                        { l: "Recomendaciones", v: iaData ? String(iaData.recomendaciones.length) : "—" },
+                        { l: "Confianza promedio", v: iaData && iaData.recomendaciones.length > 0 ? `${Math.round(iaData.recomendaciones.reduce((a, r) => a + r.confidence, 0) / iaData.recomendaciones.length)}%` : "—" },
+                      ].map((m, i) => (
                         <div key={i}><div style={{ fontSize: 24, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: C.purpleLight }}>{m.v}</div><div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, textTransform: "uppercase", letterSpacing: "0.05em" }}>{m.l}</div></div>
                       ))}
                     </div>
                   </div>
                 </div>
 
-                <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Insights de Comportamiento</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
-                  {[
-                    { title: "Horario Preferido", ins: "Reservaciones entre 9:00-11:00 AM", det: "78% de reuniones matutinas", icon: Icons.clock, acc: C.purple1 },
-                    { title: "Espacios Favoritos", ins: "Salas de 8-12 personas en pisos altos", det: "Piso 3 y 5 más frecuentes", icon: Icons.pin, acc: C.pink },
-                    { title: "Patrón de Equipo", ins: "3 equipos recurrentes por semana", det: "12 personas frecuentes", icon: Icons.users, acc: C.purpleLight },
-                  ].map((it, i) => (
-                    <div key={i} style={{ padding: 24, borderRadius: 14, background: C.glass, border: `1px solid ${C.glassBorder}`, animation: animateIn ? `fadeUp 0.4s ${i * 0.1}s ease both` : "none" }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, background: `${it.acc}20`, display: "flex", alignItems: "center", justifyContent: "center", color: it.acc, marginBottom: 14 }}>{it.icon}</div>
-                      <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{it.title}</h3>
-                      <p style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 6 }}>{it.ins}</p>
-                      <p style={{ fontSize: 12, color: C.textMuted }}>{it.det}</p>
-                    </div>
-                  ))}
-                </div>
+                {iaLoading && (
+                  <div style={{ padding: 40, textAlign: "center", color: C.purple1, fontSize: 15 }}>Analizando tu historial de reservas...</div>
+                )}
 
-                <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Recomendaciones Personalizadas</h2>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {aiRecommendations.map((rec, i) => {
-                    const isExp = expandedRec === rec.id;
-                    const tMap = { pattern: { i: Icons.trendUp, c: C.purple1 }, optimization: { i: Icons.sparkle, c: C.success }, team: { i: Icons.users, c: C.blue }, alert: { i: Icons.alert, c: C.warning } };
-                    const ti = tMap[rec.type] || tMap.pattern;
-                    return (
-                      <div key={rec.id} onClick={() => setExpandedRec(isExp ? null : rec.id)} style={{ padding: 20, borderRadius: 14, cursor: "pointer", background: isExp ? `linear-gradient(135deg, rgba(161,0,255,0.12), rgba(161,0,255,0.04))` : C.glass, border: `1px solid ${isExp ? C.purple1 + "40" : C.glassBorder}`, transition: "all 0.3s", animation: animateIn ? `slideIn 0.4s ${i * 0.08}s ease both` : "none" }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
-                          <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: `${ti.c}20`, display: "flex", alignItems: "center", justifyContent: "center", color: ti.c }}>{ti.i}</div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <h3 style={{ fontSize: 15, fontWeight: 700 }}>{rec.title}</h3>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ width: 120 }}><ConfidenceMeter value={rec.confidence} /></div>
-                                <span style={{ transform: isExp ? "rotate(90deg)" : "none", transition: "transform 0.3s", display: "inline-flex", color: C.textMuted }}>{Icons.chevron}</span>
-                              </div>
-                            </div>
-                            <div style={{ display: "flex", gap: 8, marginBottom: isExp ? 14 : 0 }}>
-                              {rec.tags.map((tag, ti) => <span key={ti} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "rgba(161,0,255,0.12)", color: C.pink }}>{tag}</span>)}
-                            </div>
-                            {isExp && (
-                              <div style={{ animation: "fadeUp 0.3s ease" }}>
-                                <p style={{ fontSize: 13, lineHeight: 1.7, color: C.textMuted, marginBottom: 16 }}>{rec.reason}</p>
-                                <div style={{ display: "flex", gap: 10 }}>
-                                  <BtnPrimary style={{ padding: "10px 24px" }}>Reservar ahora</BtnPrimary>
-                                  <BtnSecondary style={{ padding: "10px 24px" }}>Ignorar</BtnSecondary>
+                {!iaLoading && iaData && (
+                  <>
+                    <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Insights de Comportamiento</h2>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
+                      {[
+                        { title: iaData.insights.horario.titulo, ins: iaData.insights.horario.insight, det: iaData.insights.horario.detalle, icon: Icons.clock, acc: C.purple1 },
+                        { title: iaData.insights.espacios.titulo, ins: iaData.insights.espacios.insight, det: iaData.insights.espacios.detalle, icon: Icons.pin, acc: C.pink },
+                        { title: iaData.insights.equipo.titulo, ins: iaData.insights.equipo.insight, det: iaData.insights.equipo.detalle, icon: Icons.users, acc: C.purpleLight },
+                      ].map((it, i) => (
+                        <div key={i} style={{ padding: 24, borderRadius: 14, background: C.glass, border: `1px solid ${C.glassBorder}`, animation: animateIn ? `fadeUp 0.4s ${i * 0.1}s ease both` : "none" }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${it.acc}20`, display: "flex", alignItems: "center", justifyContent: "center", color: it.acc, marginBottom: 14 }}>{it.icon}</div>
+                          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{it.title}</h3>
+                          <p style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 6 }}>{it.ins}</p>
+                          <p style={{ fontSize: 12, color: C.textMuted }}>{it.det}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Recomendaciones Personalizadas</h2>
+                    {iaData.recomendaciones.length === 0 ? (
+                      <div style={{ padding: 40, textAlign: "center", color: C.textMuted, background: C.glass, borderRadius: 14, border: `1px solid ${C.glassBorder}` }}>
+                        <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.3 }}>{Icons.sparkle}</div>
+                        <p style={{ fontSize: 14 }}>Aún no hay suficientes reservas para generar recomendaciones. Sigue usando el sistema y pronto verás sugerencias personalizadas.</p>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {iaData.recomendaciones.map((rec, i) => {
+                          const isExp = expandedRec === rec.id;
+                          const tMap = { pattern: { i: Icons.trendUp, c: C.purple1 }, optimization: { i: Icons.sparkle, c: C.success }, team: { i: Icons.users, c: C.blue }, alert: { i: Icons.alert, c: C.warning } };
+                          const ti = tMap[rec.type] || tMap.pattern;
+                          return (
+                            <div key={rec.id} onClick={() => setExpandedRec(isExp ? null : rec.id)} style={{ padding: 20, borderRadius: 14, cursor: "pointer", background: isExp ? `linear-gradient(135deg, rgba(161,0,255,0.12), rgba(161,0,255,0.04))` : C.glass, border: `1px solid ${isExp ? C.purple1 + "40" : C.glassBorder}`, transition: "all 0.3s", animation: animateIn ? `slideIn 0.4s ${i * 0.08}s ease both` : "none" }}>
+                              <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+                                <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: `${ti.c}20`, display: "flex", alignItems: "center", justifyContent: "center", color: ti.c }}>{ti.i}</div>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                    <h3 style={{ fontSize: 15, fontWeight: 700 }}>{rec.title}</h3>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                      <div style={{ width: 120 }}><ConfidenceMeter value={rec.confidence} /></div>
+                                      <span style={{ transform: isExp ? "rotate(90deg)" : "none", transition: "transform 0.3s", display: "inline-flex", color: C.textMuted }}>{Icons.chevron}</span>
+                                    </div>
+                                  </div>
+                                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: isExp ? 14 : 0 }}>
+                                    {rec.tags.map((tag, tIdx) => <span key={tIdx} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "rgba(161,0,255,0.12)", color: C.pink }}>{tag}</span>)}
+                                  </div>
+                                  {isExp && (
+                                    <div style={{ animation: "fadeUp 0.3s ease" }}>
+                                      <p style={{ fontSize: 13, lineHeight: 1.7, color: C.textMuted, marginBottom: 16 }}>{rec.reason}</p>
+                                      <div style={{ display: "flex", gap: 10 }}>
+                                        <BtnPrimary onClick={(e) => { e.stopPropagation(); setScreen("areas"); }} style={{ padding: "10px 24px" }}>Reservar ahora</BtnPrimary>
+                                        <BtnSecondary onClick={(e) => { e.stopPropagation(); setExpandedRec(null); }} style={{ padding: "10px 24px" }}>Ignorar</BtnSecondary>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
