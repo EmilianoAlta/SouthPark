@@ -6,16 +6,16 @@ import React from "react";
 import { C } from "../../config/constants";
 export const StatusBadge = ({ status }) => {
   const m = {
-    confirmed: { l: "Confirmada", c: C.success, bg: "rgba(74,222,128,0.12)" },
-    active: { l: "Activa", c: C.blue, bg: "rgba(96,165,250,0.12)" },
-    pending: { l: "Pendiente", c: C.warning, bg: "rgba(251,191,36,0.12)" },
-    cancelled: { l: "Cancelada", c: C.danger, bg: "rgba(248,113,113,0.12)" },
-    available: { l: "Disponible", c: C.success, bg: "rgba(74,222,128,0.12)" },
-    occupied: { l: "Ocupado", c: C.danger, bg: "rgba(248,113,113,0.12)" },
-    maintenance: { l: "Mantenimiento", c: C.warning, bg: "rgba(251,191,36,0.12)" },
-    finished: { l: "Finalizada", c: C.textMuted, bg: "rgba(255,255,255,0.06)" },
+    confirmada: { l: "Confirmada", c: C.success, bg: "rgba(74,222,128,0.12)" },
+    activa: { l: "Activa", c: C.blue, bg: "rgba(96,165,250,0.12)" },
+    pendiente: { l: "Pendiente", c: C.warning, bg: "rgba(251,191,36,0.12)" },
+    cancelada: { l: "Cancelada", c: C.danger, bg: "rgba(248,113,113,0.12)" },
+    disponible: { l: "Disponible", c: C.success, bg: "rgba(74,222,128,0.12)" },
+    ocupado: { l: "Ocupado", c: C.danger, bg: "rgba(248,113,113,0.12)" },
+    mantenimiento: { l: "Mantenimiento", c: C.warning, bg: "rgba(251,191,36,0.12)" },
+    finalizada: { l: "Finalizada", c: C.textMuted, bg: "rgba(255,255,255,0.06)" },
   };
-  const s = m[status] || m.pending;
+  const s = m[status] || m.pendiente;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, color: s.c, background: s.bg }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.c }} />{s.l}
