@@ -235,7 +235,7 @@ export default function FloorEditor({ animateIn }) {
         {/* ── SVG Canvas ── */}
         <div style={{
           flex: 1, borderRadius: 16, border: `2px solid ${C.glassBorder}`,
-          background: "rgba(0,0,0,0.6)", padding: 16, position: "relative", overflow: "hidden",
+          background: "#000", padding: 16, position: "relative", overflow: "hidden",
           cursor: drawing ? "crosshair" : "default",
         }}>
           <div style={{ position: "absolute", top: 12, left: 16, fontSize: 11, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", zIndex: 2 }}>

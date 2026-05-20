@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { C, floorAreas as floorAreasMock, gamificationData } from "../config/constants";
+import { C, floorAreas as floorAreasMock } from "../config/constants";
 import { Logo, Icons } from "../components/ui/Icons";
 import { BtnPrimary, BtnSecondary } from "../components/ui/Buttons";
 import { StatusBadge, PulseDot, ConfidenceMeter, XPBar } from "../components/ui/Widgets";
@@ -12,9 +12,15 @@ import ProfileView from "../components/ProfileView";
 import { supabase } from "../supabaseClient";
 import { parseConflictoError, motivoToMensaje } from "../lib/reserveErrors";
 import { obtenerRecomendaciones } from "../lib/recommendations";
+import { obtenerGamificacion, obtenerLeaderboard } from "../lib/gamification";
 import FloorEditor from "../components/FloorEditor";
+import AdminDashboard from "../components/AdminDashboard";
+import ParkingView from "../components/ParkingView";
+import ParkingEditor from "../components/ParkingEditor";
 
 // Mapeo de pisos a imágenes de planos reales y etiquetas
+const XP_POR_NIVEL_DISPLAY = 500;
+
 const FLOOR_CONFIG = {
   1: { label: "PB",     img: "/floors/piso-pb.png" },
   2: { label: "MZ",     img: "/floors/piso-mz.png" },
@@ -37,6 +43,11 @@ export default function DashboardApp({ onLogout }) {
   // IA Recomendaciones — datos reales
   const [iaData, setIaData] = useState(null);
   const [iaLoading, setIaLoading] = useState(false);
+
+  // Gamificación — datos reales
+  const [gamiData, setGamiData] = useState(null);
+  const [gamiLeaderboard, setGamiLeaderboard] = useState([]);
+  const [gamiLoading, setGamiLoading] = useState(false);
 
   const ShowFloatAlert = (message, type = "success") => {
     setFloatAlert({message, type});
@@ -166,6 +177,17 @@ export default function DashboardApp({ onLogout }) {
         .catch((e) => console.error("Error cargando recomendaciones:", e))
         .finally(() => setIaLoading(false));
     }
+    if (screen === "gamification" && !gamiData && userProfile) {
+      setGamiLoading(true);
+      Promise.all([
+        obtenerGamificacion(userProfile.id_usuario),
+        obtenerLeaderboard(),
+      ]).then(([gData, lb]) => {
+        setGamiData(gData);
+        setGamiLeaderboard(lb.map(u => ({ ...u, isUser: u.id === userProfile.id_usuario })));
+      }).catch(e => console.error("Error cargando gamificación:", e))
+        .finally(() => setGamiLoading(false));
+    }
     setAnimateIn(false);
     const t = setTimeout(() => setAnimateIn(true), 50);
     return () => clearTimeout(t);
@@ -244,11 +266,16 @@ export default function DashboardApp({ onLogout }) {
 
   const sidebarItems = [
     { id: "areas", icon: Icons.map, label: "Areas Disponibles" },
+    { id: "parking", icon: Icons.parking, label: "Estacionamiento" },
     { id: "reservations", icon: Icons.calendar, label: "Reservaciones" },
     { id: "ai", icon: Icons.sparkle, label: "IA Recomendaciones" },
     { id: "gamification", icon: Icons.trophy, label: "Gamificación" },
     { id: "profile", icon: Icons.user, label: "Perfil" },
-    ...(userProfile.id_rol === 1 ? [{ id: "floor-editor", icon: Icons.edit, label: "Editor de Plano" }] : []),
+    ...(userProfile.id_rol === 1 ? [
+      { id: "admin-stats", icon: Icons.trendUp, label: "Estadísticas" },
+      { id: "floor-editor", icon: Icons.edit, label: "Editor de Plano" },
+      { id: "parking-editor", icon: Icons.parking, label: "Editor Estacionamiento" },
+    ] : []),
   ];
 
   const handleConfirmReserve = async () => {
@@ -382,7 +409,7 @@ export default function DashboardApp({ onLogout }) {
                 </div>
 
                 <div style={{ display: "flex", gap: 24 }}>
-                  <div style={{ flex: 1, borderRadius: 16, border: `2px solid ${C.glassBorder}`, background: "rgba(0,0,0,0.6)", padding: 20, position: "relative", overflow: "hidden" }}>
+                  <div style={{ flex: 1, borderRadius: 16, border: `2px solid ${C.glassBorder}`, background: "#000", padding: 20, position: "relative", overflow: "hidden" }}>
                     <div style={{ position: "absolute", top: 16, left: 20, fontSize: 12, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", zIndex: 2 }}>{FLOOR_CONFIG[selectedFloor]?.label || `Piso ${selectedFloor}`}</div>
                     <svg viewBox="0 0 100 71" style={{ width: "100%", height: "auto" }}>
                       {/* Plano real como fondo */}
@@ -734,104 +761,141 @@ export default function DashboardApp({ onLogout }) {
                   <p style={{ fontSize: 14, color: C.textMuted }}>Gana puntos, desbloquea logros y compite con tus compañeros</p>
                 </div>
 
-                {/* Player Card */}
-                <div style={{ padding: 28, borderRadius: 16, background: `linear-gradient(135deg, rgba(161,0,255,0.2), rgba(200,80,255,0.08))`, border: `1px solid ${C.glassBorder}`, marginBottom: 28, display: "flex", alignItems: "center", gap: 28 }}>
-                  <div style={{ width: 80, height: 80, borderRadius: "50%", background: C.purple1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, boxShadow: `0 0 30px ${C.purple1}50`, border: "3px solid rgba(255,255,255,0.2)" }}>{userProfile.nombre[0]}{userProfile.primer_apellido[0]}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-                      <h2 style={{ fontSize: 22, fontWeight: 800 }}>MariaGtz23</h2>
-                      <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: `${C.purple1}30`, color: C.purpleLight }}>Nivel {gamificationData.level}</span>
-                    </div>
-                    <p style={{ fontSize: 14, color: C.purpleLight, fontWeight: 600, marginBottom: 12 }}>{gamificationData.rank}</p>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <XPBar current={gamificationData.xp} max={gamificationData.nextLevelXp} />
-                      <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", whiteSpace: "nowrap" }}>{gamificationData.xp}/{gamificationData.nextLevelXp} XP</span>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 24 }}>
-                    {[
-                      { l: "Racha", v: `${gamificationData.streak} días`, icon: Icons.fire, c: "#FF6B35" },
-                      { l: "Reservaciones", v: gamificationData.totalReservations, icon: Icons.calendar, c: C.purple1 },
-                      { l: "Puntualidad", v: `${gamificationData.punctuality}%`, icon: Icons.clock, c: C.success },
-                    ].map((s, i) => (
-                      <div key={i} style={{ textAlign: "center" }}>
-                        <div style={{ color: s.c, display: "flex", justifyContent: "center", marginBottom: 4 }}>{s.icon}</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>{s.v}</div>
-                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.l}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                {gamiLoading && (
+                  <div style={{ textAlign: "center", padding: 40, color: C.textMuted }}>Cargando datos...</div>
+                )}
 
-                <div style={{ padding: 24, borderRadius: 14, background: C.glass, border: `1px solid ${C.glassBorder}`, marginBottom: 28, animation: "glow 3s ease infinite" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 22 }}>🎯</span>
-                      <div>
-                        <h3 style={{ fontSize: 15, fontWeight: 700 }}>Desafío Semanal</h3>
-                        <p style={{ fontSize: 13, color: C.textMuted }}>{gamificationData.weeklyChallenge.title}</p>
-                      </div>
-                    </div>
-                    <span style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, background: `${C.warning}20`, color: C.warning }}>+{gamificationData.weeklyChallenge.reward} XP</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <XPBar current={gamificationData.weeklyChallenge.progress} max={gamificationData.weeklyChallenge.target} height={10} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: "'JetBrains Mono', monospace" }}>{gamificationData.weeklyChallenge.progress}/{gamificationData.weeklyChallenge.target}</span>
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-                  <div>
-                    <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Logros</h2>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                      {gamificationData.badges.map((b, i) => (
-                        <div key={b.id} style={{
-                          padding: 16, borderRadius: 14, textAlign: "center",
-                          background: b.earned ? C.glass : "rgba(255,255,255,0.02)",
-                          border: `1px solid ${b.earned ? C.glassBorder : "rgba(255,255,255,0.05)"}`,
-                          opacity: b.earned ? 1 : 0.4,
-                          animation: animateIn ? `fadeUp 0.3s ${i * 0.05}s ease both` : "none",
-                          transition: "transform 0.2s",
-                        }}>
-                          <div style={{ fontSize: 30, marginBottom: 8, filter: b.earned ? "none" : "grayscale(1)" }}>{b.icon}</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{b.name}</div>
-                          <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.4 }}>{b.desc}</div>
+                {gamiData && (
+                  <>
+                    {/* Player Card */}
+                    <div style={{ padding: 28, borderRadius: 16, background: `linear-gradient(135deg, rgba(161,0,255,0.2), rgba(200,80,255,0.08))`, border: `1px solid ${C.glassBorder}`, marginBottom: 28, display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
+                      <div style={{ width: 80, height: 80, borderRadius: "50%", background: C.purple1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, boxShadow: `0 0 30px ${C.purple1}50`, border: "3px solid rgba(255,255,255,0.2)" }}>{userProfile.nombre?.[0]}{userProfile.primer_apellido?.[0]}</div>
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+                          <h2 style={{ fontSize: 22, fontWeight: 800 }}>{userProfile.nombre} {userProfile.primer_apellido}</h2>
+                          <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: `${C.purple1}30`, color: C.purpleLight }}>Nivel {gamiData.nivel}</span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Tabla de Líderes</h2>
-                    <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${C.glassBorder}`, background: C.glass }}>
-                      {gamificationData.leaderboard.map((p, i) => (
-                        <div key={p.rank} style={{
-                          display: "flex", alignItems: "center", gap: 14, padding: "16px 20px",
-                          borderBottom: i < gamificationData.leaderboard.length - 1 ? `1px solid rgba(161,0,255,0.08)` : "none",
-                          background: p.isUser ? "rgba(161,0,255,0.12)" : "transparent",
-                          animation: animateIn ? `slideIn 0.3s ${i * 0.08}s ease both` : "none",
-                        }}>
-                          <span style={{
-                            width: 28, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 13, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace",
-                            background: p.rank === 1 ? "linear-gradient(135deg, #FFD700, #FFA500)" : p.rank === 2 ? "linear-gradient(135deg, #C0C0C0, #A0A0A0)" : p.rank === 3 ? "linear-gradient(135deg, #CD7F32, #B87333)" : "rgba(255,255,255,0.08)",
-                            color: p.rank <= 3 ? "#000" : C.textMuted,
-                          }}>{p.rank}</span>
-                          <div style={{ width: 36, height: 36, borderRadius: "50%", background: p.isUser ? C.purple1 : "rgba(161,0,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, border: p.isUser ? "2px solid rgba(255,255,255,0.3)" : "none" }}>{p.avatar}</div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 14, fontWeight: p.isUser ? 800 : 600 }}>{p.name}{p.isUser && <span style={{ fontSize: 11, color: C.purpleLight, marginLeft: 8 }}>(Tú)</span>}</div>
+                        <p style={{ fontSize: 14, color: C.purpleLight, fontWeight: 600, marginBottom: 12 }}>{gamiData.rango}</p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <XPBar current={gamiData.xp % XP_POR_NIVEL_DISPLAY} max={XP_POR_NIVEL_DISPLAY} />
+                          <span style={{ fontSize: 12, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", whiteSpace: "nowrap" }}>{gamiData.xp} XP</span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 24 }}>
+                        {[
+                          { l: "Racha", v: `${gamiData.racha} días`, icon: Icons.fire, c: "#FF6B35" },
+                          { l: "Reservaciones", v: gamiData.totalReservas, icon: Icons.calendar, c: C.purple1 },
+                          { l: "Puntualidad", v: `${gamiData.puntualidad}%`, icon: Icons.clock, c: C.success },
+                        ].map((s, i) => (
+                          <div key={i} style={{ textAlign: "center" }}>
+                            <div style={{ color: s.c, display: "flex", justifyContent: "center", marginBottom: 4 }}>{s.icon}</div>
+                            <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>{s.v}</div>
+                            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{s.l}</div>
                           </div>
-                          <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: C.purpleLight }}>{p.xp.toLocaleString()} XP</span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </div>
+
+                    {/* Desafío Semanal */}
+                    <div style={{ padding: 24, borderRadius: 14, background: C.glass, border: `1px solid ${C.glassBorder}`, marginBottom: 28 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 22 }}>🎯</span>
+                          <div>
+                            <h3 style={{ fontSize: 15, fontWeight: 700 }}>Desafío Semanal</h3>
+                            <p style={{ fontSize: 13, color: C.textMuted }}>{gamiData.desafioSemanal.title}</p>
+                          </div>
+                        </div>
+                        <span style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, background: `${C.warning}20`, color: C.warning }}>+{gamiData.desafioSemanal.reward} XP</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <XPBar current={gamiData.desafioSemanal.progress} max={gamiData.desafioSemanal.target} height={10} />
+                        <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: "'JetBrains Mono', monospace" }}>{gamiData.desafioSemanal.progress}/{gamiData.desafioSemanal.target}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+                      {/* Logros */}
+                      <div>
+                        <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Logros ({gamiData.badges.filter(b => b.earned).length}/{gamiData.badges.length})</h2>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                          {gamiData.badges.map((b, i) => (
+                            <div key={b.id} style={{
+                              padding: 16, borderRadius: 14, textAlign: "center",
+                              background: b.earned ? C.glass : "rgba(255,255,255,0.02)",
+                              border: `1px solid ${b.earned ? C.glassBorder : "rgba(255,255,255,0.05)"}`,
+                              opacity: b.earned ? 1 : 0.4,
+                              animation: animateIn ? `fadeUp 0.3s ${i * 0.05}s ease both` : "none",
+                              transition: "transform 0.2s",
+                              position: "relative", overflow: "hidden",
+                            }}>
+                              <div style={{ fontSize: 30, marginBottom: 8, filter: b.earned ? "none" : "grayscale(1)" }}>{b.icon}</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{b.name}</div>
+                              <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.4, marginBottom: 6 }}>{b.desc}</div>
+                              {!b.earned && b.progress !== undefined && (
+                                <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", borderRadius: 2, background: C.purple1, width: `${Math.min((b.progress / b.target) * 100, 100)}%`, transition: "width 1s" }} />
+                                </div>
+                              )}
+                              {b.earned && (
+                                <div style={{ position: "absolute", top: 6, right: 6, width: 16, height: 16, borderRadius: "50%", background: C.success, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Leaderboard */}
+                      <div>
+                        <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Tabla de Líderes</h2>
+                        <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${C.glassBorder}`, background: C.glass }}>
+                          {gamiLeaderboard.length === 0 && (
+                            <div style={{ padding: 24, textAlign: "center", color: C.textMuted, fontSize: 13 }}>Sin datos aún</div>
+                          )}
+                          {gamiLeaderboard.map((p, i) => (
+                            <div key={p.rank} style={{
+                              display: "flex", alignItems: "center", gap: 14, padding: "16px 20px",
+                              borderBottom: i < gamiLeaderboard.length - 1 ? `1px solid rgba(161,0,255,0.08)` : "none",
+                              background: p.isUser ? "rgba(161,0,255,0.12)" : "transparent",
+                              animation: animateIn ? `slideIn 0.3s ${i * 0.08}s ease both` : "none",
+                            }}>
+                              <span style={{
+                                width: 28, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: 13, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace",
+                                background: p.rank === 1 ? "linear-gradient(135deg, #FFD700, #FFA500)" : p.rank === 2 ? "linear-gradient(135deg, #C0C0C0, #A0A0A0)" : p.rank === 3 ? "linear-gradient(135deg, #CD7F32, #B87333)" : "rgba(255,255,255,0.08)",
+                                color: p.rank <= 3 ? "#000" : C.textMuted,
+                              }}>{p.rank}</span>
+                              <div style={{ width: 36, height: 36, borderRadius: "50%", background: p.isUser ? C.purple1 : "rgba(161,0,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, border: p.isUser ? "2px solid rgba(255,255,255,0.3)" : "none" }}>{p.avatar}</div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: p.isUser ? 800 : 600 }}>{p.name}{p.isUser && <span style={{ fontSize: 11, color: C.purpleLight, marginLeft: 8 }}>(Tú)</span>}</div>
+                              </div>
+                              <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: C.purpleLight }}>{p.xp.toLocaleString()} XP</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
+            )}
+
+            {screen === "parking" && (
+              <ParkingView animateIn={animateIn} ShowFloatAlert={ShowFloatAlert} />
+            )}
+
+            {screen === "admin-stats" && userProfile.id_rol === 1 && (
+              <AdminDashboard animateIn={animateIn} />
             )}
 
             {screen === "floor-editor" && userProfile.id_rol === 1 && (
               <FloorEditor animateIn={animateIn} />
+            )}
+
+            {screen === "parking-editor" && userProfile.id_rol === 1 && (
+              <ParkingEditor animateIn={animateIn} />
             )}
 
           </div>
