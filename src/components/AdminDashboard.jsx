@@ -1,5 +1,6 @@
 // src/components/AdminDashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import QRCode from "react-qr-code";
 import { C } from "../config/constants";
 import { supabase } from "../supabaseClient";
 import { Icons } from "./ui/Icons";
@@ -238,6 +239,9 @@ export default function AdminDashboard({ animateIn }) {
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [updatingUser, setUpdatingUser] = useState(null);
+  const [zonas, setZonas] = useState([]);
+  const [zonasEst, setZonasEst] = useState([]);
+  const [qrLoading, setQrLoading] = useState(false);
 
   // ── Fetch data ──────────────────────────────────────────────────────────
 
@@ -255,6 +259,20 @@ export default function AdminDashboard({ animateIn }) {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // ── Fetch QR data (lazy — only when tab is active) ───────────────────────
+  useEffect(() => {
+    if (tab !== "qrcodes") return;
+    setQrLoading(true);
+    Promise.all([
+      supabase.from("Zona").select("id_zona, nombre_zona, piso").order("piso"),
+      supabase.from("ZonaEstacionamiento").select("id_zona_est, nombre_nivel, nivel").order("nivel"),
+    ]).then(([{ data: z }, { data: ze }]) => {
+      setZonas(z || []);
+      setZonasEst(ze || []);
+      setQrLoading(false);
+    });
+  }, [tab]);
 
   // ── Fetch user detail ────────────────────────────────────────────────────
 
@@ -523,10 +541,11 @@ export default function AdminDashboard({ animateIn }) {
           <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 4 }}>Panel de Administración</h1>
           <p style={{ fontSize: 14, color: C.textMuted }}>Estadísticas y gestión de usuarios</p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {tabBtn("general", "Dashboard")}
           {tabBtn("reportes", "Reportes")}
           {tabBtn("usuarios", "Usuarios")}
+          {tabBtn("qrcodes", "Códigos QR")}
         </div>
       </div>
 
@@ -821,6 +840,117 @@ export default function AdminDashboard({ animateIn }) {
             </table>
           </div>
         </Card>
+      )}
+
+      {/* ═══════ TAB: CÓDIGOS QR ═══════ */}
+      {tab === "qrcodes" && (
+        <>
+          {/* Print CSS — se inyecta solo cuando este tab está activo */}
+          <style>{`
+            @media print {
+              header, nav, .tab-bar, button { display: none !important; }
+              body { background: white !important; color: black !important; }
+              .qr-card { page-break-inside: avoid; }
+            }
+          `}</style>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+            <p style={{ fontSize: 14, color: C.textMuted, margin: 0 }}>
+              Imprime o coloca cada código en su zona. Al escanearlo, el usuario verá solo su reserva de esa zona.
+            </p>
+            <button
+              onClick={() => window.print()}
+              style={{
+                padding: "8px 18px", borderRadius: 10, border: `1px solid ${C.glassBorder}`,
+                background: "rgba(161,0,255,0.12)", color: C.purpleLight, fontSize: 13,
+                cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              🖨️ Imprimir todos
+            </button>
+          </div>
+
+          {qrLoading ? (
+            <div style={{ textAlign: "center", color: C.textMuted, padding: 40 }}>Cargando zonas...</div>
+          ) : (
+            <>
+              {/* ── Zonas de trabajo ── */}
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: C.purpleLight, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                🏢 Zonas de Trabajo
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20, marginBottom: 32 }}>
+                {zonas.map(z => {
+                  const qrUrl = `${window.location.origin}/checkin?zona=${z.id_zona}`;
+                  return (
+                    <div key={z.id_zona} className="qr-card" style={{
+                      background: "rgba(161,0,255,0.06)", borderRadius: 16,
+                      border: `1px solid ${C.glassBorder}`, padding: 24,
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+                    }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: 0, textAlign: "center" }}>
+                        Piso {z.piso} · {z.nombre_zona}
+                      </h4>
+                      <div style={{ background: "#fff", padding: 14, borderRadius: 12 }}>
+                        <QRCode value={qrUrl} size={170} />
+                      </div>
+                      <p style={{ fontSize: 10, color: C.textMuted, textAlign: "center", wordBreak: "break-all", margin: 0 }}>
+                        {qrUrl}
+                      </p>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(qrUrl)}
+                        style={{
+                          padding: "6px 14px", borderRadius: 8, border: `1px solid ${C.glassBorder}`,
+                          background: "transparent", color: C.textMuted, fontSize: 11,
+                          cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
+                        }}
+                      >
+                        📋 Copiar URL
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Zonas de estacionamiento ── */}
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: C.purpleLight, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                🅿️ Estacionamiento
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20 }}>
+                {zonasEst.map(ze => {
+                  const qrUrl = `${window.location.origin}/checkin?parking=${ze.id_zona_est}`;
+                  return (
+                    <div key={ze.id_zona_est} className="qr-card" style={{
+                      background: "rgba(161,0,255,0.06)", borderRadius: 16,
+                      border: `1px solid ${C.glassBorder}`, padding: 24,
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+                    }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 700, color: "#fff", margin: 0, textAlign: "center" }}>
+                        {ze.nombre_nivel}
+                      </h4>
+                      <div style={{ background: "#fff", padding: 14, borderRadius: 12 }}>
+                        <QRCode value={qrUrl} size={170} />
+                      </div>
+                      <p style={{ fontSize: 10, color: C.textMuted, textAlign: "center", wordBreak: "break-all", margin: 0 }}>
+                        {qrUrl}
+                      </p>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(qrUrl)}
+                        style={{
+                          padding: "6px 14px", borderRadius: 8, border: `1px solid ${C.glassBorder}`,
+                          background: "transparent", color: C.textMuted, fontSize: 11,
+                          cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
+                        }}
+                      >
+                        📋 Copiar URL
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {/* ═══════ TAB: PERFIL INDIVIDUAL ═══════ */}

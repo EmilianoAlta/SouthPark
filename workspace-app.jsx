@@ -9,8 +9,11 @@ import CheckinPage from "./src/pages/CheckinPage";
 import { UserProvider, useUser } from "./src/context/UserContext";
 import { supabase } from "./src/supabaseClient";
 
-// Detectar si el usuario llegó escaneando el QR de check-in
-const IS_CHECKIN_ROUTE = window.location.pathname === "/checkin";
+// Detectar si el usuario llegó escaneando un QR de check-in
+const IS_CHECKIN_ROUTE  = window.location.pathname === "/checkin";
+const _qrParams         = IS_CHECKIN_ROUTE ? new URLSearchParams(window.location.search) : null;
+const CHECKIN_ZONA_ID   = _qrParams?.get("zona")    ? parseInt(_qrParams.get("zona"), 10)    : null;
+const CHECKIN_PARKING_ID = _qrParams?.get("parking") ? parseInt(_qrParams.get("parking"), 10) : null;
 
 export default function App() {
   return (
@@ -43,6 +46,8 @@ const MainRouter = () => {
     if (IS_CHECKIN_ROUTE) {
       return (
         <CheckinPage
+          idZona={CHECKIN_ZONA_ID}
+          idParking={CHECKIN_PARKING_ID}
           onBackToApp={() => {
             window.history.replaceState({}, "", "/");
             window.location.reload();

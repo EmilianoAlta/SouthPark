@@ -70,7 +70,7 @@ const btn = (bg, color, disabled) => ({
 // ────────────────────────────────────────────────────────────────────────────
 // Componente principal
 // ────────────────────────────────────────────────────────────────────────────
-export default function CheckinPage({ onBackToApp }) {
+export default function CheckinPage({ onBackToApp, idZona = null, idParking = null }) {
   const { userProfile } = useUser();
 
   const [reserva, setReserva] = useState(null);
@@ -95,7 +95,12 @@ export default function CheckinPage({ onBackToApp }) {
   const fetchProxima = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("proxima_reserva");
+      let rpcName, rpcArgs;
+      if (idParking)    { rpcName = "proxima_reserva_parking"; rpcArgs = { p_id_zona_est: idParking }; }
+      else if (idZona)  { rpcName = "proxima_reserva_zona";    rpcArgs = { p_id_zona: idZona }; }
+      else              { rpcName = "proxima_reserva";         rpcArgs = {}; }
+
+      const { data, error } = await supabase.rpc(rpcName, rpcArgs);
       if (error) throw error;
       setReserva(data?.[0] ?? null);
     } catch (e) {
@@ -104,7 +109,7 @@ export default function CheckinPage({ onBackToApp }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [idZona, idParking]);
 
   useEffect(() => {
     if (userProfile) fetchProxima();
@@ -113,24 +118,28 @@ export default function CheckinPage({ onBackToApp }) {
   // ── realtime ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userProfile) return;
+    const channelName = idParking
+      ? `checkin-parking-${idParking}`
+      : idZona
+        ? `checkin-zona-${idZona}`
+        : "checkin-reserva";
+    const table = idParking ? "ReservaEstacionamiento" : "Reserva";
     const ch = supabase
-      .channel("checkin-reserva")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "Reserva" },
-        () => fetchProxima()
-      )
+      .channel(channelName)
+      .on("postgres_changes", { event: "*", schema: "public", table }, () => fetchProxima())
       .subscribe();
     return () => supabase.removeChannel(ch);
-  }, [userProfile, fetchProxima]);
+  }, [userProfile, fetchProxima, idZona, idParking]);
 
   // ── acciones ───────────────────────────────────────────────────────────
   const handleCheckin = async () => {
     setBusy(true);
     try {
-      const { error } = await supabase.rpc("confirmar_checkin", {
-        p_id_reserva: reserva.id_reserva,
-      });
+      const rpcName = idParking ? "confirmar_checkin_parking" : "confirmar_checkin";
+      const rpcArgs = idParking
+        ? { p_id_reserva_est: reserva.id_reserva_est }
+        : { p_id_reserva: reserva.id_reserva };
+      const { error } = await supabase.rpc(rpcName, rpcArgs);
       if (error) throw error;
       showToast("¡Check-in confirmado! Bienvenido al espacio.", "success");
       fetchProxima();
@@ -152,9 +161,11 @@ export default function CheckinPage({ onBackToApp }) {
   const handleCheckout = async () => {
     setBusy(true);
     try {
-      const { error } = await supabase.rpc("finalizar_checkout", {
-        p_id_reserva: reserva.id_reserva,
-      });
+      const rpcName = idParking ? "finalizar_checkout_parking" : "finalizar_checkout";
+      const rpcArgs = idParking
+        ? { p_id_reserva_est: reserva.id_reserva_est }
+        : { p_id_reserva: reserva.id_reserva };
+      const { error } = await supabase.rpc(rpcName, rpcArgs);
       if (error) throw error;
       showToast("¡Check-out realizado! +10 puntos de gamificación.", "success");
       fetchProxima();
@@ -169,10 +180,16 @@ export default function CheckinPage({ onBackToApp }) {
   const handleCancelar = async () => {
     setBusy(true);
     try {
-      const { error } = await supabase.rpc("cancelar_reserva", {
-        p_id_reserva: reserva.id_reserva,
-      });
-      if (error) throw error;
+      if (idParking) {
+        const { error } = await supabase
+          .from("ReservaEstacionamiento")
+          .update({ id_estado: 4 })
+          .eq("id_reserva_est", reserva.id_reserva_est);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc("cancelar_reserva", { p_id_reserva: reserva.id_reserva });
+        if (error) throw error;
+      }
       showToast("Reserva cancelada.", "success");
       fetchProxima();
     } catch (e) {
@@ -218,7 +235,9 @@ export default function CheckinPage({ onBackToApp }) {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Logo size={40} />
-          <span style={{ fontWeight: 800, fontSize: 17 }}>WorkSpace · Check-in</span>
+          <span style={{ fontWeight: 800, fontSize: 17 }}>
+            {idParking ? "Estacionamiento · Check-in" : "WorkSpace · Check-in"}
+          </span>
         </div>
         <button
           onClick={onBackToApp}
@@ -238,6 +257,28 @@ export default function CheckinPage({ onBackToApp }) {
         </button>
       </header>
 
+      {/* Banner de zona — solo cuando se llega desde un QR de zona específica */}
+      {(idZona || idParking) && (
+        <div
+          style={{
+            background: "rgba(161,0,255,0.12)",
+            borderBottom: `1px solid rgba(161,0,255,0.2)`,
+            padding: "10px 28px",
+            fontSize: 13,
+            color: C.purpleLight,
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          {"📍 "}
+          {idParking
+            ? "Nivel de estacionamiento: " + (reserva?.zona_nombre ?? "Nivel " + idParking)
+            : "Zona: " + (reserva?.zona_nombre ?? "Zona " + idZona) + " (Piso " + (reserva?.zona_piso ?? idZona) + ")"}
+        </div>
+      )}
+
       {/* Body */}
       <div
         style={{
@@ -251,7 +292,7 @@ export default function CheckinPage({ onBackToApp }) {
         {loading ? (
           <div style={{ color: C.purple1, fontSize: 16 }}>Cargando tu reserva...</div>
         ) : !reserva ? (
-          <EmptyState onBack={onBackToApp} />
+          <EmptyState onBack={onBackToApp} idZona={idZona} idParking={idParking} />
         ) : (
           <div style={{ ...card, display: "flex", flexDirection: "column", gap: 24 }}>
             {/* Título */}
@@ -260,10 +301,12 @@ export default function CheckinPage({ onBackToApp }) {
                 Tu próxima reserva
               </p>
               <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>
-                {reserva.espacio_codigo}
+                {idParking ? reserva.cajon_codigo : reserva.espacio_codigo}
               </h2>
               <p style={{ fontSize: 13, color: C.textMuted, marginTop: 2 }}>
-                {reserva.espacio_tipo} · {reserva.zona_nombre} (Piso {reserva.zona_piso})
+                {idParking
+                  ? `Cajón · ${reserva.zona_nombre}`
+                  : `${reserva.espacio_tipo} · ${reserva.zona_nombre} (Piso ${reserva.zona_piso})`}
               </p>
             </div>
 
@@ -280,7 +323,9 @@ export default function CheckinPage({ onBackToApp }) {
                 label="Horario"
                 value={`${fmt(reserva.hora_inicio)} – ${fmt(reserva.hora_fin)}`}
               />
-              <InfoCell label="Asistentes" value={`${reserva.asistentes} persona(s)`} />
+              {!idParking && (
+                <InfoCell label="Asistentes" value={`${reserva.asistentes} persona(s)`} />
+              )}
               <InfoCell
                 label="Estado"
                 value={
@@ -473,7 +518,7 @@ function CheckinWindowBanner({ windowInfo, horaInicio }) {
   );
 }
 
-function EmptyState({ onBack }) {
+function EmptyState({ onBack, idZona, idParking }) {
   return (
     <div style={{ textAlign: "center", maxWidth: 360 }}>
       <div style={{ fontSize: 56, marginBottom: 16, opacity: 0.4 }}>📅</div>
@@ -481,7 +526,9 @@ function EmptyState({ onBack }) {
         Sin reservas próximas
       </h2>
       <p style={{ color: C.textMuted, fontSize: 14, marginBottom: 24 }}>
-        No tienes reservas pendientes o activas para hoy o días futuros.
+        {idParking || idZona
+          ? "No tienes reservas pendientes o activas en esta zona para hoy o días futuros."
+          : "No tienes reservas pendientes o activas para hoy o días futuros."}
       </p>
       <button
         onClick={onBack}
