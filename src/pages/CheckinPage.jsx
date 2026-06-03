@@ -13,7 +13,8 @@ import ConfirmModal from "../components/ui/ConfirmModal";
 const fmt = (t) => (t ? String(t).slice(0, 5) : "--:--");
 
 const getCheckinWindowInfo = (reserva) => {
-  if (!reserva || reserva.id_estado !== 3) return { dentro: false, falta: null };
+  // Estado 3 = Pendiente (workspace), Estado 1 = Confirmada (parking) — ambos requieren check-in
+  if (!reserva || (reserva.id_estado !== 3 && reserva.id_estado !== 1)) return { dentro: false, falta: null };
 
   const ahora = new Date();
 
@@ -331,26 +332,26 @@ export default function CheckinPage({ onBackToApp, idZona = null, idParking = nu
                 value={
                   <StatusBadge
                     status={
-                      reserva.id_estado === 2
-                        ? "active"
-                        : reserva.id_estado === 3
-                        ? "pending"
-                        : "finished"
+                      reserva.id_estado === 1 ? "confirmada"
+                      : reserva.id_estado === 2 ? "activa"
+                      : reserva.id_estado === 3 ? "pendiente"
+                      : reserva.id_estado === 4 ? "cancelada"
+                      : "finalizada"
                     }
                   />
                 }
               />
             </div>
 
-            {/* Ventana de check-in (solo si pendiente) */}
-            {reserva.id_estado === 3 && windowInfo && (
+            {/* Ventana de check-in (pendiente workspace=3, confirmada parking=1) */}
+            {(reserva.id_estado === 3 || reserva.id_estado === 1) && windowInfo && (
               <CheckinWindowBanner windowInfo={windowInfo} horaInicio={reserva.hora_inicio} />
             )}
 
             {/* Botones */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {/* Check-in: solo si pendiente */}
-              {reserva.id_estado === 3 && (
+              {/* Check-in: pendiente (3) o confirmada parking (1) */}
+              {(reserva.id_estado === 3 || reserva.id_estado === 1) && (
                 <button
                   style={btn(`linear-gradient(90deg, ${C.purple1}, ${C.purpleLight})`, C.white, !windowInfo?.dentro || busy)}
                   disabled={!windowInfo?.dentro || busy}
@@ -360,7 +361,7 @@ export default function CheckinPage({ onBackToApp, idZona = null, idParking = nu
                 </button>
               )}
 
-              {/* Checkout: solo si activa */}
+              {/* Checkout: solo si activa (2) */}
               {reserva.id_estado === 2 && (
                 <button
                   style={btn(`linear-gradient(90deg, ${C.blue}, #7dd3fc)`, "#0c1a2e", busy)}
@@ -371,8 +372,8 @@ export default function CheckinPage({ onBackToApp, idZona = null, idParking = nu
                 </button>
               )}
 
-              {/* Cancelar: solo si pendiente */}
-              {reserva.id_estado === 3 && (
+              {/* Cancelar: pendiente (3) o confirmada parking (1) */}
+              {(reserva.id_estado === 3 || reserva.id_estado === 1) && (
                 <button
                   style={btn("rgba(248,113,113,0.15)", C.danger, busy)}
                   disabled={busy}

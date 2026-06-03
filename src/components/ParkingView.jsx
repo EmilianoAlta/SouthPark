@@ -186,8 +186,6 @@ export default function ParkingView({ animateIn, ShowFloatAlert }) {
     else { ShowFloatAlert("Reserva cancelada.", "success"); fetchCajones(); fetchMisReservas(); }
   };
 
-  const estadoMap = { 1: "confirmed", 2: "active", 3: "pending", 4: "cancelled", 5: "finished" };
-
   return (
     <div style={{ opacity: animateIn ? 1 : 0, transform: animateIn ? "none" : "translateY(20px)", transition: "all 0.5s cubic-bezier(0.22,1,0.36,1)" }}>
       {/* Header */}
@@ -289,7 +287,7 @@ export default function ParkingView({ animateIn, ShowFloatAlert }) {
               <p style={{ fontSize: 13, color: C.textMuted, marginBottom: 4 }}>{selectedCajon.type}</p>
               <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 16 }}>{PARKING_CONFIG[selectedLevel]?.label}</p>
 
-              <StatusBadge status={getStatus(selectedCajon) === "occupied" ? "occupied" : getStatus(selectedCajon) === "maintenance" ? "maintenance" : "available"} />
+              <StatusBadge status={getStatus(selectedCajon) === "occupied" ? "ocupado" : getStatus(selectedCajon) === "maintenance" ? "mantenimiento" : "disponible"} />
 
               <div style={{ margin: "20px 0", height: 1, background: "rgba(255,255,255,0.1)" }} />
 
