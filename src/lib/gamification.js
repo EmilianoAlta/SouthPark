@@ -187,6 +187,17 @@ function calcularDesafioSemanal(reservas) {
   };
 }
 
+// ── Exports para pruebas unitarias (lógica pura, sin efectos de red) ─────────
+
+export {
+  calcularXP,
+  calcularNivel,
+  getRango,
+  calcularRacha,
+  calcularBadges,
+  calcularDesafioSemanal,
+};
+
 // ── API pública ─────────────────────────────────────────────────────────────
 
 export async function obtenerGamificacion(userId) {

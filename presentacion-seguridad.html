@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SouthPark · Seguridad de Base de Datos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #root { height: 100%; width: 100%; }
+    body {
+      font-family: 'Nunito Sans', sans-serif;
+      background: #1c0a20;
+      overflow: hidden;
+      color: #FFF8F8;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+    .slide-anim { animation: slideIn 0.45s cubic-bezier(.2,.7,.3,1); }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(161,0,255,.4); border-radius: 8px; }
+
+    /* ---- Impresión / Guardar como PDF ---- */
+    @media print {
+      @page { size: landscape; margin: 0; }
+      html, body, #root { height: auto; overflow: visible; background: #120615; }
+      .no-print { display: none !important; }
+      .print-page {
+        width: 100%; height: 100vh; page-break-after: always; overflow: hidden;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+      .print-page:last-child { page-break-after: auto; }
+      .slide-anim { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+    const C = {
+      purple1: "#A100FF", purple2: "#8141AA", purple3: "#B257ED", purple4: "#9B46A0",
+      purple5: "#38193A", purple6: "#6B2D8B", purpleLight: "#C850FF", purplePale: "#E8D0F0",
+      pink: "#F6AFFA", pinkLight: "#FDD6FF",
+      cardDark: "linear-gradient(160deg, #9B46A0 0%, #38193A 100%)",
+      cardMid: "linear-gradient(160deg, #ECB9F3 0%, #B539C6 100%)",
+      text: "#FFF8F8", textMuted: "rgba(255,248,248,0.62)", white: "#FFFFFF",
+      success: "#4ADE80", warning: "#FBBF24", danger: "#F87171", blue: "#60A5FA",
+      glass: "rgba(255,255,255,0.06)", glassBorder: "rgba(255,255,255,0.14)",
+    };
+
+    // ---------- componentes reutilizables ----------
+    const Chip = ({ children, color }) => (
+      <span className="mono" style={{
+        fontSize: 12, fontWeight: 600, padding: "4px 11px", borderRadius: 999,
+        background: (color || C.purple1) + "22", color: color || C.purpleLight,
+        border: `1px solid ${(color || C.purple1)}55`, whiteSpace: "nowrap",
+      }}>{children}</span>
+    );
+
+    const Card = ({ children, style, accent }) => (
+      <div style={{
+        background: C.glass, border: `1px solid ${C.glassBorder}`,
+        borderLeft: accent ? `4px solid ${accent}` : `1px solid ${C.glassBorder}`,
+        borderRadius: 16, padding: "18px 22px", backdropFilter: "blur(6px)", ...style,
+      }}>{children}</div>
+    );
+
+    const PhaseTag = ({ n, label }) => (
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+        <span style={{
+          fontSize: 13, fontWeight: 800, letterSpacing: 1, color: C.purple5,
+          background: `linear-gradient(135deg, ${C.pink}, ${C.purpleLight})`,
+          padding: "5px 13px", borderRadius: 8,
+        }}>FASE {n}</span>
+        <span style={{ fontSize: 13, color: C.textMuted, letterSpacing: 2, textTransform: "uppercase" }}>{label}</span>
+      </div>
+    );
+
+    const Title = ({ children }) => (
+      <h1 style={{ fontSize: 42, fontWeight: 900, lineHeight: 1.1, marginBottom: 22,
+        background: `linear-gradient(120deg, #FFFFFF, ${C.pinkLight})`,
+        WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{children}</h1>
+    );
+
+    const Sev = ({ level }) => {
+      const map = { alta: [C.danger, "🔴 ALTA"], media: [C.warning, "🟡 MEDIA"], baja: [C.success, "🟢 BAJA"] };
+      const [c, t] = map[level];
+      return <Chip color={c}>{t}</Chip>;
+    };
+
+    // ---------- SLIDES ----------
+    const slides = [
+      // 0 — Portada
+      () => (
+        <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", gap: 26 }}>
+          <div style={{ width: 92, height: 92, borderRadius: 26, background: `linear-gradient(135deg, ${C.purple1}, ${C.purple5})`,
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 46, boxShadow: `0 20px 60px ${C.purple1}55` }}>🛡️</div>
+          <div>
+            <h1 style={{ fontSize: 58, fontWeight: 900, lineHeight: 1.05,
+              background: `linear-gradient(120deg, #FFFFFF, ${C.pinkLight})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              Seguridad de Base de Datos
+            </h1>
+            <p style={{ fontSize: 24, color: C.purpleLight, fontWeight: 700, marginTop: 6 }}>SouthPark · Reservación de espacios</p>
+          </div>
+          <p style={{ fontSize: 16, color: C.textMuted, maxWidth: 620, lineHeight: 1.6 }}>
+            Análisis de datos sensibles, amenazas y medidas de protección sobre React + Supabase (PostgreSQL).
+          </p>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+            <Chip>React 18</Chip><Chip color={C.success}>Supabase Auth</Chip><Chip color={C.blue}>PostgreSQL + RLS</Chip>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <p style={{ fontSize: 13, color: C.purpleLight, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Equipo</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 9, justifyContent: "center", maxWidth: 760 }}>
+              {[
+                ["Emiliano Altamirano Baez", "A00838577"],
+                ["Lucas Mateo Tapia Callisperis", "A00840248"],
+                ["Rafael Cárdenas Meneses", "A00838348"],
+                ["Emiliano Enríquez López", "A01174554"],
+                ["Sergio Rodríguez Pérez", "A00838856"],
+              ].map(([nombre, mat]) => (
+                <span key={mat} style={{ display: "inline-flex", alignItems: "center", gap: 7,
+                  background: C.glass, border: `1px solid ${C.glassBorder}`, borderRadius: 999, padding: "6px 13px" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{nombre}</span>
+                  <span className="mono" style={{ fontSize: 11, color: C.purpleLight }}>{mat}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          <p className="mono" style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>M5 — BD: Seguridad   ·   2026</p>
+        </div>
+      ),
+
+      // 1 — Fase 1 datos sensibles
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={1} label="Identificación de datos sensibles" />
+          <Title>¿Qué datos guarda la base de datos?</Title>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+            <Card accent={C.danger}>
+              <Sev level="alta" />
+              <h3 style={{ fontSize: 19, fontWeight: 800, margin: "12px 0 8px" }}>Alta sensibilidad</h3>
+              <ul style={{ fontSize: 15, color: C.text, lineHeight: 1.9, paddingLeft: 18 }}>
+                <li>Contraseñas (hash bcrypt)</li>
+                <li>Número de empleado</li>
+                <li>Correo corporativo</li>
+                <li>Nombre completo (PII)</li>
+              </ul>
+            </Card>
+            <Card accent={C.warning}>
+              <Sev level="media" />
+              <h3 style={{ fontSize: 19, fontWeight: 800, margin: "12px 0 8px" }}>Media sensibilidad</h3>
+              <ul style={{ fontSize: 15, color: C.text, lineHeight: 1.9, paddingLeft: 18 }}>
+                <li>Historial de reservas</li>
+                <li>Gamificación / puntos</li>
+                <li>Logs de conflicto</li>
+                <li>Bloqueos temporales</li>
+              </ul>
+            </Card>
+            <Card accent={C.success}>
+              <Sev level="baja" />
+              <h3 style={{ fontSize: 19, fontWeight: 800, margin: "12px 0 8px" }}>Baja sensibilidad</h3>
+              <ul style={{ fontSize: 15, color: C.text, lineHeight: 1.9, paddingLeft: 18 }}>
+                <li>Catálogo de espacios</li>
+                <li>Zonas y planos</li>
+                <li>Estados y beneficios</li>
+              </ul>
+            </Card>
+          </div>
+          <Card style={{ marginTop: 18 }} accent={C.purpleLight}>
+            <strong style={{ color: C.purpleLight }}>Impacto de una fuga:</strong>
+            <span style={{ color: C.text, fontSize: 15 }}> PII de empleados reales de Accenture → phishing dirigido e ingeniería social. El historial revela <b>patrones de presencia física</b> (quién, dónde y a qué hora) → riesgo de privacidad y seguridad.</span>
+          </Card>
+        </div>
+      ),
+
+      // 2 — Fase 1 roles
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={1} label="Niveles de acceso" />
+          <Title>¿Quién accede y con qué nivel?</Title>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {[
+              ["👑", "Administrador", "id_rol = 1", "Lectura/escritura de todas las tablas vía es_admin()", C.danger],
+              ["👤", "Empleado", "id_rol = 2", "Solo sus propios datos: id_usuario = auth.uid(). Lee catálogos.", C.warning],
+              ["🚪", "Anónimo", "sin sesión", "Sin acceso a datos de negocio. Solo registro / login.", C.blue],
+              ["⚙️", "service_role", "backend", "Acceso total — NUNCA debe exponerse en el frontend.", C.success],
+            ].map(([ic, rol, tag, desc, col]) => (
+              <Card key={rol} accent={col} style={{ display: "flex", alignItems: "center", gap: 18 }}>
+                <span style={{ fontSize: 30 }}>{ic}</span>
+                <div style={{ minWidth: 170 }}>
+                  <div style={{ fontSize: 19, fontWeight: 800 }}>{rol}</div>
+                  <Chip color={col}>{tag}</Chip>
+                </div>
+                <div style={{ fontSize: 15, color: C.text }}>{desc}</div>
+              </Card>
+            ))}
+          </div>
+          <p style={{ marginTop: 18, fontSize: 15, color: C.purpleLight, fontWeight: 700, textAlign: "center" }}>
+            🔑 Principio de mínimo privilegio: cada quien ve solo lo que necesita.
+          </p>
+        </div>
+      ),
+
+      // 3 — Fase 2 amenazas
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={2} label="Identificación de amenazas" />
+          <Title>Amenazas evaluadas</Title>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {[
+              ["💉", "Inyección SQL", "Mitigada — PostgREST parametriza; RPCs con parámetros tipados", C.success],
+              ["🔓", "Acceso no autorizado", "Mitigada con Row Level Security (1 hallazgo abierto)", C.warning],
+              ["🔑", "Robo de credenciales", "Parcial — hashing sí; falta MFA y rate-limit", C.warning],
+              ["📤", "Secretos en el cliente", "ABIERTO — API key de OpenAI en el bundle", C.danger],
+              ["🪜", "Escalada de privilegios", "Mitigada — el rol lo fija el backend, no el cliente", C.success],
+              ["💾", "Pérdida de datos", "Mitigada — backups automáticos de Supabase", C.success],
+            ].map(([ic, t, d, col]) => (
+              <Card key={t} accent={col}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 22 }}>{ic}</span>
+                  <strong style={{ fontSize: 17 }}>{t}</strong>
+                </div>
+                <div style={{ fontSize: 14, color: C.textMuted }}>{d}</div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ),
+
+      // 4 — Fase 2 diagrama
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={2} label="Puntos vulnerables del sistema" />
+          <Title>Diagrama de superficie de ataque</Title>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+            <Card accent={C.blue} style={{ width: "78%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div><span style={{ fontSize: 22 }}>🌐</span> <b style={{ fontSize: 17 }}>Navegador (React + Vite bundle)</b></div>
+                <Chip color={C.danger}>🔴 OpenAI key expuesta</Chip>
+              </div>
+              <div className="mono" style={{ fontSize: 13, color: C.textMuted, marginTop: 8 }}>VITE_OPENAI_API_KEY → queda en el JS · VITE_SUPABASE_ANON_KEY (pública, OK)</div>
+            </Card>
+            <span style={{ color: C.purpleLight, fontSize: 22 }}>↓ HTTPS / TLS</span>
+            <Card accent={C.success} style={{ width: "78%" }}>
+              <div><span style={{ fontSize: 22 }}>🗄️</span> <b style={{ fontSize: 17 }}>Supabase</b></div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+                <div className="mono" style={{ fontSize: 13, color: C.text, background: C.glass, padding: 10, borderRadius: 10 }}>Auth · bcrypt hash<br/>trigger handle_new_user</div>
+                <div className="mono" style={{ fontSize: 13, color: C.text, background: C.glass, padding: 10, borderRadius: 10 }}>PostgREST<br/>queries parametrizadas</div>
+              </div>
+              <div className="mono" style={{ fontSize: 13, color: C.text, background: "rgba(74,222,128,.1)", padding: 10, borderRadius: 10, marginTop: 10 }}>
+                PostgreSQL + RLS · policies own_or_admin · es_admin() · RPCs SECURITY DEFINER · Backups ✅
+              </div>
+            </Card>
+          </div>
+        </div>
+      ),
+
+      // 5 — Fase 3 medidas A
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={3} label="Medidas implementadas (1 de 2)" />
+          <Title>Autenticación, acceso y anti-inyección</Title>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Card accent={C.success}>
+              <h3 style={{ fontSize: 19, fontWeight: 800 }}>① Autenticación + control de acceso por rol</h3>
+              <ul style={{ fontSize: 15, lineHeight: 1.8, paddingLeft: 18, marginTop: 6 }}>
+                <li>Supabase Auth (<span className="mono">signInWithPassword</span> / <span className="mono">signUp</span>).</li>
+                <li>Validación de dominio <b>en doble capa</b>: frontend + trigger <span className="mono">handle_new_user</span>.</li>
+                <li>RLS activado en todas las tablas; policies <span className="mono">id_usuario = auth.uid() or es_admin()</span>.</li>
+                <li>Anti-escalada: <span className="mono">id_rol</span> lo asigna el servidor, no el cliente.</li>
+              </ul>
+            </Card>
+            <Card accent={C.blue}>
+              <h3 style={{ fontSize: 19, fontWeight: 800 }}>② Validación de entradas / prevención de SQLi</h3>
+              <ul style={{ fontSize: 15, lineHeight: 1.8, paddingLeft: 18, marginTop: 6 }}>
+                <li>Sin SQL concatenado: el SDK envía parámetros tipados.</li>
+                <li>Escritura de <span className="mono">Reserva</span> solo vía RPC <span className="mono">crear_reserva</span> / <span className="mono">cancelar_reserva</span> (patrón de procedimiento almacenado).</li>
+                <li>Validaciones server-side: autenticación, <span className="mono">hora_inicio &lt; hora_fin</span>, cupo y traslape.</li>
+              </ul>
+            </Card>
+          </div>
+        </div>
+      ),
+
+      // 6 — Fase 3 medidas B
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={3} label="Medidas implementadas (2 de 2)" />
+          <Title>Cifrado, respaldo y monitoreo</Title>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Card accent={C.purpleLight}>
+              <h3 style={{ fontSize: 19, fontWeight: 800 }}>③ Cifrado de datos 🔐</h3>
+              <ul style={{ fontSize: 15, lineHeight: 1.8, paddingLeft: 18, marginTop: 6 }}>
+                <li>Contraseñas con <b>bcrypt</b> (nunca en texto plano).</li>
+                <li>En tránsito: <b>HTTPS / TLS</b>.</li>
+                <li>En reposo: discos cifrados <b>AES-256</b>.</li>
+              </ul>
+            </Card>
+            <Card accent={C.success}>
+              <h3 style={{ fontSize: 19, fontWeight: 800 }}>④ Backup y recuperación 💾</h3>
+              <ul style={{ fontSize: 15, lineHeight: 1.8, paddingLeft: 18, marginTop: 6 }}>
+                <li>Backups automáticos diarios de Supabase.</li>
+                <li>Esquema versionado en <span className="mono">db/</span> (scripts 01–09).</li>
+                <li>Reconstrucción total ejecutando los scripts en orden.</li>
+              </ul>
+            </Card>
+            <Card accent={C.warning} style={{ gridColumn: "1 / 3" }}>
+              <h3 style={{ fontSize: 19, fontWeight: 800 }}>⑤ Monitoreo y auditoría 📊</h3>
+              <ul style={{ fontSize: 15, lineHeight: 1.8, paddingLeft: 18, marginTop: 6 }}>
+                <li><span className="mono">LogConflictoReserva</span>: registra cada intento de reserva fallido (quién, espacio, motivo).</li>
+                <li><span className="mono">BloqueoReserva</span> + <span className="mono">pg_cron</span>: evitan condiciones de carrera y dobles reservas.</li>
+                <li>Supabase Logs: accesos a la API y errores de autenticación.</li>
+              </ul>
+            </Card>
+          </div>
+        </div>
+      ),
+
+      // 7 — Fase 4 pruebas
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={4} label="Pruebas de seguridad" />
+          <Title>Resultados de las pruebas</Title>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {[
+              ["Inyección SQL en login", "Tratada como literal, rechazada", "ok"],
+              ["Leer Usuario de otro (RLS)", "Devuelve vacío — filtra por auth.uid()", "ok"],
+              ["Insert directo a Reserva", "Bloqueado — solo vía RPC", "ok"],
+              ["Cancelar reserva ajena", "Excepción 'No autorizado' (42501)", "ok"],
+              ["Escalada de id_rol", "Endurecer con trigger de inmutabilidad", "warn"],
+              ["Recuperación desde backup", "Restaura por backup o scripts db/", "ok"],
+              ["Extraer secretos del bundle", "Se encuentra la API key de OpenAI", "fail"],
+            ].map(([t, d, st]) => {
+              const col = st === "ok" ? C.success : st === "warn" ? C.warning : C.danger;
+              const ic = st === "ok" ? "✅" : st === "warn" ? "⚠️" : "❌";
+              return (
+                <div key={t} style={{ display: "flex", alignItems: "center", gap: 14, background: C.glass,
+                  border: `1px solid ${C.glassBorder}`, borderLeft: `4px solid ${col}`, borderRadius: 12, padding: "11px 16px" }}>
+                  <span style={{ fontSize: 20 }}>{ic}</span>
+                  <b style={{ fontSize: 16, minWidth: 280 }}>{t}</b>
+                  <span style={{ fontSize: 14, color: C.textMuted }}>{d}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ marginTop: 16, fontSize: 17, textAlign: "center", fontWeight: 800, color: C.success }}>
+            6 de 7 amenazas mitigadas · 1 hallazgo crítico por corregir
+          </p>
+        </div>
+      ),
+
+      // 8 — Hallazgos abiertos
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={4} label="Hallazgos abiertos" />
+          <Title>Áreas que necesitan mejora</Title>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Card accent={C.danger}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Sev level="alta" /><b style={{ fontSize: 19 }}>API key de OpenAI expuesta</b></div>
+              <p style={{ fontSize: 15, color: C.text, marginTop: 8, lineHeight: 1.6 }}>
+                <span className="mono">recommendations.js</span> usa <span className="mono">VITE_OPENAI_API_KEY</span> en el cliente → se incrusta en el bundle público.
+                <b style={{ color: C.pink }}> Solución:</b> mover la llamada a un Edge Function / backend.
+              </p>
+            </Card>
+            <Card accent={C.warning}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Sev level="media" /><b style={{ fontSize: 19 }}>Reserva legible por todos</b></div>
+              <p style={{ fontSize: 15, color: C.text, marginTop: 8, lineHeight: 1.6 }}>
+                <span className="mono">fix_rls_reserva.sql</span> abrió la tabla con <span className="mono">USING (true)</span> para pintar el mapa → expone PII ajena.
+                <b style={{ color: C.pink }}> Solución:</b> una vista agregada sin PII + restaurar <span className="mono">own_or_admin</span>.
+              </p>
+            </Card>
+          </div>
+        </div>
+      ),
+
+      // 9 — Fase 5 aprendizajes
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={5} label="Documentación · Aprendizajes" />
+          <Title>Lo que aprendimos</Title>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {[
+              ["🛡️", "La seguridad vive en el backend", "RLS + RPCs en el servidor; nunca confiar en validaciones del cliente."],
+              ["📤", "Toda variable VITE_* es pública", "Los secretos van en un servidor o Edge Function, jamás en el bundle."],
+              ["🔑", "Mínimo privilegio", "Abrir una policy a USING(true) por conveniencia introduce fugas de PII."],
+            ].map(([ic, t, d]) => (
+              <Card key={t} accent={C.purpleLight} style={{ display: "flex", gap: 18, alignItems: "center" }}>
+                <span style={{ fontSize: 34 }}>{ic}</span>
+                <div><div style={{ fontSize: 19, fontWeight: 800 }}>{t}</div><div style={{ fontSize: 15, color: C.textMuted, marginTop: 3 }}>{d}</div></div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ),
+
+      // 10 — Fase 6 resumen de la presentación
+      () => (
+        <div className="slide-anim">
+          <PhaseTag n={6} label="Presentación" />
+          <Title>Lo que presentamos al grupo</Title>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <Card accent={C.danger}>
+              <div style={{ fontSize: 28 }}>⚠️</div>
+              <h3 style={{ fontSize: 19, fontWeight: 800, margin: "6px 0" }}>1. Riesgos identificados</h3>
+              <ul style={{ fontSize: 14, color: C.text, lineHeight: 1.7, paddingLeft: 18 }}>
+                <li>Inyección SQL y acceso no autorizado</li>
+                <li>Robo de credenciales / escalada de rol</li>
+                <li>Secretos expuestos en el cliente</li>
+                <li>Pérdida de datos</li>
+              </ul>
+            </Card>
+            <Card accent={C.success}>
+              <div style={{ fontSize: 28 }}>🛡️</div>
+              <h3 style={{ fontSize: 19, fontWeight: 800, margin: "6px 0" }}>2. Medidas implementadas</h3>
+              <ul style={{ fontSize: 14, color: C.text, lineHeight: 1.7, paddingLeft: 18 }}>
+                <li>Auth + RLS por rol (own_or_admin)</li>
+                <li>RPCs con validación server-side</li>
+                <li>Cifrado bcrypt + TLS</li>
+                <li>Backups + auditoría de conflictos</li>
+              </ul>
+            </Card>
+            <Card accent={C.blue}>
+              <div style={{ fontSize: 28 }}>📊</div>
+              <h3 style={{ fontSize: 19, fontWeight: 800, margin: "6px 0" }}>3. Resultados y mejoras</h3>
+              <ul style={{ fontSize: 14, color: C.text, lineHeight: 1.7, paddingLeft: 18 }}>
+                <li>6 de 7 amenazas mitigadas</li>
+                <li>Hallazgo: API key de OpenAI → mover a backend</li>
+                <li>Hallazgo: Reserva legible → vista sin PII</li>
+              </ul>
+            </Card>
+            <Card accent={C.purpleLight}>
+              <div style={{ fontSize: 28 }}>💬</div>
+              <h3 style={{ fontSize: 19, fontWeight: 800, margin: "6px 0" }}>4. Preguntas del grupo</h3>
+              <p style={{ fontSize: 14, color: C.text, lineHeight: 1.7 }}>
+                Abrimos espacio para dudas sobre RLS, las RPCs, el manejo de contraseñas y el plan de remediación.
+              </p>
+            </Card>
+          </div>
+        </div>
+      ),
+
+      // 11 — Plan de remediación / cierre
+      () => (
+        <div className="slide-anim" style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <PhaseTag n={6} label="Cierre · Próximos pasos" />
+          <Title>Plan de remediación</Title>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[
+              ["🔴", "Alta", "Mover OpenAI a un Edge Function; eliminar la key del cliente.", C.danger],
+              ["🟡", "Media", "Vista agregada sin PII para el mapa; restaurar own_or_admin en Reserva.", C.warning],
+              ["🟡", "Media", "Trigger que impida cambiar id_rol / numero_empleado salvo admin.", C.warning],
+              ["🟢", "Baja", "Activar confirmación de correo y evaluar MFA en Supabase Auth.", C.success],
+            ].map(([ic, p, d, col]) => (
+              <div key={d} style={{ display: "flex", alignItems: "center", gap: 14, background: C.glass,
+                border: `1px solid ${C.glassBorder}`, borderLeft: `4px solid ${col}`, borderRadius: 12, padding: "13px 18px" }}>
+                <span style={{ fontSize: 20 }}>{ic}</span>
+                <Chip color={col}>{p}</Chip>
+                <span style={{ fontSize: 16 }}>{d}</span>
+              </div>
+            ))}
+          </div>
+          <p style={{ marginTop: 28, fontSize: 26, fontWeight: 900, textAlign: "center",
+            background: `linear-gradient(120deg, #FFFFFF, ${C.pinkLight})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            ¡Gracias!  ¿Preguntas? 🛡️
+          </p>
+        </div>
+      ),
+    ];
+
+    function App() {
+      const [i, setI] = useState(0);
+      const [printMode, setPrintMode] = useState(false);
+      const n = slides.length;
+      const go = useCallback((d) => setI(p => Math.max(0, Math.min(n - 1, p + d))), [n]);
+
+      // Descargar como PDF: renderiza todas las slides y abre el diálogo de impresión
+      const downloadPDF = useCallback(() => setPrintMode(true), []);
+      useEffect(() => {
+        if (!printMode) return;
+        const after = () => setPrintMode(false);
+        window.addEventListener("afterprint", after);
+        const t = setTimeout(() => window.print(), 120); // esperar a pintar todas las slides
+        return () => { clearTimeout(t); window.removeEventListener("afterprint", after); };
+      }, [printMode]);
+
+      useEffect(() => {
+        const onKey = (e) => {
+          if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") go(1);
+          else if (e.key === "ArrowLeft" || e.key === "PageUp") go(-1);
+          else if (e.key === "f" || e.key === "F") toggleFs();
+          else if (e.key === "Home") setI(0);
+          else if (e.key === "End") setI(n - 1);
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+      }, [go, n]);
+
+      const toggleFs = () => {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      };
+
+      const slideBg = `radial-gradient(120% 120% at 0% 0%, ${C.purple5} 0%, #1c0a20 55%, #120615 100%)`;
+
+      // Modo PDF: todas las diapositivas, una por página
+      if (printMode) {
+        return (
+          <div>
+            {slides.map((Slide, k) => (
+              <div key={k} className="print-page" style={{ position: "relative", background: slideBg }}>
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+                  padding: "54px 76px", maxWidth: 1180, margin: "0 auto", overflow: "hidden" }}>
+                  <div style={{ flex: 1 }}><Slide /></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+
+      const Slide = slides[i];
+      return (
+        <div style={{ height: "100%", width: "100%", position: "relative",
+          background: slideBg }}>
+          {/* glow decorativo */}
+          <div style={{ position: "absolute", top: -120, right: -80, width: 380, height: 380, borderRadius: "50%",
+            background: `radial-gradient(circle, ${C.purple1}33, transparent 70%)`, pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: -140, left: -100, width: 420, height: 420, borderRadius: "50%",
+            background: `radial-gradient(circle, ${C.purple3}26, transparent 70%)`, pointerEvents: "none" }} />
+
+          {/* lienzo de la diapositiva */}
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+            padding: "54px 76px 90px", maxWidth: 1180, margin: "0 auto", overflow: "auto" }}>
+            <div key={i} style={{ flex: 1 }}><Slide /></div>
+          </div>
+
+          {/* barra inferior */}
+          <div className="no-print" style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 64,
+            display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 30px",
+            background: "rgba(18,6,21,0.55)", borderTop: `1px solid ${C.glassBorder}`, backdropFilter: "blur(8px)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>🛡️</span>
+              <span style={{ fontSize: 13, color: C.textMuted, fontWeight: 700 }}>SouthPark · Seguridad de BD</span>
+            </div>
+            <div style={{ display: "flex", gap: 7 }}>
+              {slides.map((_, k) => (
+                <button key={k} onClick={() => setI(k)} aria-label={"slide " + (k+1)} style={{
+                  width: k === i ? 26 : 9, height: 9, borderRadius: 999, border: "none", cursor: "pointer", padding: 0,
+                  background: k === i ? `linear-gradient(90deg, ${C.pink}, ${C.purpleLight})` : "rgba(255,255,255,0.22)",
+                  transition: "all .25s" }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button onClick={() => go(-1)} disabled={i === 0} style={navBtn(i === 0)}>←</button>
+              <span className="mono" style={{ fontSize: 13, color: C.textMuted, minWidth: 54, textAlign: "center" }}>{i + 1} / {n}</span>
+              <button onClick={() => go(1)} disabled={i === n - 1} style={navBtn(i === n - 1)}>→</button>
+              <button onClick={toggleFs} title="Pantalla completa (F)" style={{ ...navBtn(false), width: "auto", padding: "0 12px", fontSize: 13 }}>⛶</button>
+              <button onClick={downloadPDF} title="Descargar como PDF" style={{
+                ...navBtn(false), width: "auto", padding: "0 14px", fontSize: 13, fontWeight: 800, gap: 6,
+                background: `linear-gradient(135deg, ${C.pink}, ${C.purpleLight})`, color: C.purple5, border: "none" }}>
+                ⬇ PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const navBtn = (disabled) => ({
+      width: 38, height: 38, borderRadius: 10, border: `1px solid ${C.glassBorder}`,
+      background: disabled ? "rgba(255,255,255,0.04)" : "rgba(161,0,255,0.22)",
+      color: disabled ? "rgba(255,255,255,0.25)" : C.text, fontSize: 18, cursor: disabled ? "default" : "pointer",
+      display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s",
+    });
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

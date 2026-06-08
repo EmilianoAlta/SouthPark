@@ -226,6 +226,10 @@ function fallbackLocal(historial, espacios) {
   return { insights, recomendaciones: recs };
 }
 
+// ── Exports para pruebas unitarias (lógica pura, sin efectos de red) ─────────
+
+export { horaANumero, franjaTexto, moda, top, fallbackLocal };
+
 // ── API publica ────────────────────────────────────────────────────────────
 
 export async function obtenerRecomendaciones(userId) {
