@@ -6,26 +6,16 @@ disponibilidad en tiempo real sobre planos arquitectónicos reales, reservar esp
 cajones de estacionamiento, hacer check-in/check-out con QR, y a los administradores
 gestionar espacios y consultar reportes de uso.
 
-> Proyecto de la unidad de formación **Planeación de Sistemas de Software (Gpo 103)** —
-> Tecnológico de Monterrey. Socio formador: Accenture.
-
 ---
 
 ## Enlaces clave
 
 | Recurso | Enlace |
 |---------|--------|
-| 🌐 Sistema desplegado | `https://workhub-mty.vercel.app` _(verificar URL real de producción)_ |
+| 🌐 Sistema desplegado | https://workhub-mty.vercel.app |
 | 💻 Repositorio | https://github.com/EmilianoAlta/SouthPark |
-| 📋 Gestión del proyecto (Azure DevOps Boards) | _Tablero `WorkHub MTY Team` — agregar enlace_ |
+| 📋 Gestión del proyecto (Azure DevOps Boards) | https://dev.azure.com/A00838856/WorkHub%20MTY|
 | 🎥 Video funcional | _Agregar enlace_ |
-
-### Credenciales de prueba
-
-```
-Usuario:     <correo de prueba>@accenture.com   (pendiente: credenciales reales)
-Contraseña:  <contraseña de prueba>
-```
 
 > El registro está restringido a dominios `@accenture.com` (y `@tec.mx` habilitado para
 > debug durante el desarrollo).
@@ -145,7 +135,7 @@ npm run dev                 # http://localhost:5173
 |----------|-------------|
 | `VITE_SUPABASE_URL` | URL pública del proyecto Supabase |
 | `VITE_SUPABASE_ANON_KEY` | Clave anónima (pública) de Supabase |
-| `VITE_OPENAI_API_KEY` | (Opcional) Clave de OpenAI para recomendaciones IA con GPT-4o-mini |
+| `VITE_OPENAI_API_KEY` | Clave de OpenAI para recomendaciones IA con GPT-4o-mini |
 
 > El archivo `.env` está ignorado por git. Nunca se commitea.
 
@@ -197,7 +187,7 @@ Vercel detecta Vite automáticamente, instala dependencias, ejecuta el build y d
 **Vercel → Settings → Environment Variables**.
 
 > La gestión del proyecto (sprints, historias, tareas, capacity, burndown) se lleva en
-> **Azure DevOps Boards**.
+> **Azure DevOps**.
 
 ---
 
@@ -227,10 +217,10 @@ SouthPark/
 
 ## Equipo
 
-| Integrante | Matrícula |
-|-----------|-----------|
-| Emiliano Altamirano Báez | A00838577 |
-| Lucas Mateo Tapia Callisperis | A00840248 |
-| Rafael Cárdenas Meneses | A00838348 |
-| Emiliano Enríquez López | A01174554 |
-| Sergio Rodríguez Pérez | A00838856 |
+| Integrante
+|-----------
+| Emiliano Altamirano Báez |
+| Lucas Mateo Tapia Callisperis |
+| Rafael Cárdenas Meneses |
+| Emiliano Enríquez López |
+| Sergio Rodríguez Pérez
