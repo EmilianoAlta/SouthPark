@@ -695,6 +695,7 @@ export default function DashboardApp({ onLogout }) {
                         { title: iaData.insights.horario.titulo, ins: iaData.insights.horario.insight, det: iaData.insights.horario.detalle, icon: Icons.clock, acc: C.purple1 },
                         { title: iaData.insights.espacios.titulo, ins: iaData.insights.espacios.insight, det: iaData.insights.espacios.detalle, icon: Icons.pin, acc: C.pink },
                         { title: iaData.insights.equipo.titulo, ins: iaData.insights.equipo.insight, det: iaData.insights.equipo.detalle, icon: Icons.users, acc: C.purpleLight },
+                        { title: iaData.insights.estacionamiento?.titulo || "Estacionamiento", ins: iaData.insights.estacionamiento?.insight || "Sin datos", det: iaData.insights.estacionamiento?.detalle || "Análisis pendiente", icon: Icons.parking, acc: C.success }
                       ].map((it, i) => (
                         <div key={i} style={{ padding: 24, borderRadius: 14, background: C.glass, border: `1px solid ${C.glassBorder}`, animation: animateIn ? `fadeUp 0.4s ${i * 0.1}s ease both` : "none" }}>
                           <div style={{ width: 36, height: 36, borderRadius: 10, background: `${it.acc}20`, display: "flex", alignItems: "center", justifyContent: "center", color: it.acc, marginBottom: 14 }}>{it.icon}</div>

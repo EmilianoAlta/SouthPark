@@ -60,7 +60,8 @@ Responde SOLO con un JSON valido (sin markdown, sin backticks) con esta estructu
   "insights": {
     "horario": { "titulo": "Horario Preferido", "insight": "...", "detalle": "..." },
     "espacios": { "titulo": "Espacios Favoritos", "insight": "...", "detalle": "..." },
-    "equipo": { "titulo": "Patron de Equipo", "insight": "...", "detalle": "..." }
+    "equipo": { "titulo": "Patron de Equipo", "insight": "...", "detalle": "..." },
+    "estacionamiento": { "titulo": "Uso de Estacionamiento", "insight": "...", "detalle": "..." }
   },
   "recomendaciones": [
     {
@@ -159,6 +160,7 @@ function fallbackLocal(historial, espacios) {
         horario: { titulo: "Horario Preferido", insight: "Sin datos suficientes", detalle: "Reserva mas espacios para obtener insights" },
         espacios: { titulo: "Espacios Favoritos", insight: "Sin datos suficientes", detalle: "Reserva mas espacios para obtener insights" },
         equipo: { titulo: "Patron de Equipo", insight: "Sin datos suficientes", detalle: "Reserva mas espacios para obtener insights" },
+        estacionamiento: { titulo: "Uso de Estacionamiento", insight: "Sin datos suficientes", detalle: "Reserva espacios para obtener insights" }
       },
       recomendaciones: [],
     };
@@ -197,6 +199,11 @@ function fallbackLocal(historial, espacios) {
       insight: `~${asistentesPromedio} personas por reserva`,
       detalle: `${historial.length} reservas analizadas`,
     },
+    estacionamiento: {
+      titulo: "Uso de Estacionamiento",
+      insight: "Datos en análisis",
+      detalle: "Basado en tu asignación general"
+    }
   };
 
   const recs = [];
