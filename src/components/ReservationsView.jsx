@@ -12,6 +12,7 @@ const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
 export default function ReservationsView({ animateIn, onGoToAreas }) {
+  const [mainTab, setMainTab] = useState("workspace"); // "workspace" | "parking"
   const [viewMode, setViewMode] = useState("calendar"); // "calendar" | "list"
   const [filter, setFilter] = useState("all");
   const [myReservations, setMyReservations] = useState([]);
@@ -22,6 +23,11 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
   const [toast, setToast] = useState(null);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
+  // ── Parking state ──
+  const [parkingReservas, setParkingReservas] = useState([]);
+  const [loadingParking, setLoadingParking] = useState(false);
+  const [confirmCancelParking, setConfirmCancelParking] = useState(null);
+  const [cancellingParking, setCancellingParking] = useState(false);
   const { userProfile } = useUser();
 
   const showToast = (message, type = "success") => {
@@ -49,6 +55,49 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
   };
 
   useEffect(() => { if (userProfile) fetchReservas(); }, [userProfile]);
+
+  // ── Fetch parking reservations ──
+  const fetchParkingReservas = async () => {
+    setLoadingParking(true);
+    try {
+      const { data, error } = await supabase
+        .from("ReservaEstacionamiento")
+        .select("*, Cajon(codigo, tipo, ZonaEstacionamiento(nombre_nivel, nivel))")
+        .eq("id_usuario", userProfile.id_usuario)
+        .order("fecha_reserva", { ascending: false });
+      if (error) throw error;
+      setParkingReservas(data || []);
+    } catch (e) {
+      console.error("Error cargando reservas de estacionamiento:", e.message);
+    } finally {
+      setLoadingParking(false);
+    }
+  };
+
+  useEffect(() => {
+    if (userProfile && mainTab === "parking") fetchParkingReservas();
+  }, [userProfile, mainTab]);
+
+  const ejecutarCancelacionParking = async () => {
+    if (!confirmCancelParking) return;
+    setCancellingParking(true);
+    try {
+      const { error } = await supabase
+        .from("ReservaEstacionamiento")
+        .update({ id_estado: 4 })
+        .eq("id_reserva_est", confirmCancelParking)
+        .eq("id_usuario", userProfile.id_usuario);
+      if (error) throw error;
+      setConfirmCancelParking(null);
+      showToast("Reserva de cajón cancelada.", "success");
+      fetchParkingReservas();
+    } catch (e) {
+      showToast("No se pudo cancelar la reserva.", "error");
+      setConfirmCancelParking(null);
+    } finally {
+      setCancellingParking(false);
+    }
+  };
 
   const ejecutarCancelacion = async () => {
     if (!confirmCancel) return;
@@ -123,6 +172,16 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
 
   const statusKey = (r) => r.id_estado === 1 ? "confirmed" : r.id_estado === 2 ? "active" : r.id_estado === 3 ? "pending" : r.id_estado === 4 ? "cancelled" : r.id_estado === 5 ? "finished" : "unknown";
   const statusColors = { confirmed: C.success, active: C.blue, pending: C.warning, cancelled: C.danger, finished: C.textMuted };
+  // Claves en español para StatusBadge
+  const estadoBadge = (id_estado) => id_estado === 1 ? "confirmada" : id_estado === 2 ? "activa" : id_estado === 3 ? "pendiente" : id_estado === 4 ? "cancelada" : "finalizada";
+  const estadoColor = (id_estado) => id_estado === 2 ? C.blue : id_estado === 3 ? C.warning : id_estado === 1 ? C.success : id_estado === 4 ? C.danger : C.textMuted;
+
+  // ── Parking stats ──
+  const pTotal = parkingReservas.length;
+  const pActivas = parkingReservas.filter(r => [1, 2, 3].includes(r.id_estado)).length;
+  const pFinalizadas = parkingReservas.filter(r => r.id_estado === 5).length;
+  const pCanceladas = parkingReservas.filter(r => r.id_estado === 4).length;
+  const pProxima = parkingReservas.find(r => [1, 2, 3].includes(r.id_estado) && r.fecha_reserva >= hoyStr);
 
   return (
     <div style={{ animation: animateIn ? "fadeUp 0.5s ease forwards" : "none", opacity: animateIn ? 1 : 0 }}>
@@ -143,9 +202,30 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
         </div>
       </div>
 
+      {/* ── Main tab toggle ── */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 24, background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 4, width: "fit-content" }}>
+        {[{ id: "workspace", label: "🏢 Espacios de Trabajo" }, { id: "parking", label: "🅿️ Estacionamiento" }].map(t => (
+          <button key={t.id} onClick={() => setMainTab(t.id)} style={{
+            padding: "10px 22px", borderRadius: 10, border: "none", fontSize: 14,
+            fontWeight: mainTab === t.id ? 700 : 500, cursor: "pointer", fontFamily: "inherit",
+            color: mainTab === t.id ? "#fff" : C.textMuted,
+            background: mainTab === t.id ? C.purple1 : "transparent",
+            transition: "all 0.25s ease",
+          }}>{t.label}</button>
+        ))}
+      </div>
+
       {/* ── Stat Widgets ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-        {stats.map((s, i) => (
+        {(mainTab === "parking"
+          ? [
+              { label: "Total", value: pTotal, icon: "🅿️", color: C.purple1, bg: "rgba(161,0,255,0.12)" },
+              { label: "Activas", value: pActivas, icon: Icons.clock, color: C.blue, bg: "rgba(96,165,250,0.12)" },
+              { label: "Finalizadas", value: pFinalizadas, icon: Icons.check || "✓", color: C.success, bg: "rgba(74,222,128,0.12)" },
+              { label: "Canceladas", value: pCanceladas, icon: Icons.x || "✕", color: C.danger, bg: "rgba(248,113,113,0.12)" },
+            ]
+          : stats
+        ).map((s, i) => (
           <div key={i} style={{
             borderRadius: 14, padding: "18px 20px",
             background: C.glass, border: `1px solid ${C.glassBorder}`,
