@@ -690,7 +690,7 @@ export default function DashboardApp({ onLogout }) {
                 {!iaLoading && iaData && (
                   <>
                     <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Insights de Comportamiento</h2>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 }}>
                       {[
                         { title: iaData.insights.horario.titulo, ins: iaData.insights.horario.insight, det: iaData.insights.horario.detalle, icon: Icons.clock, acc: C.purple1 },
                         { title: iaData.insights.espacios.titulo, ins: iaData.insights.espacios.insight, det: iaData.insights.espacios.detalle, icon: Icons.pin, acc: C.pink },
