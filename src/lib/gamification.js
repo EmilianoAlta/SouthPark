@@ -231,10 +231,10 @@ export async function obtenerGamificacion(userId) {
 }
 
 export async function obtenerLeaderboard() {
-  // Traer todas las reservas con usuario
-  const { data, error } = await supabase
-    .from("Reserva")
-    .select("id_usuario, id_estado, Usuario(nombre, primer_apellido)");
+  // Traer todas las reservas con nombre de usuario vía RPC SECURITY DEFINER.
+  // (No se puede hacer el join directo a Usuario porque el RLS solo deja leer
+  //  la fila propia; el RPC expone solo nombre/apellido para el leaderboard.)
+  const { data, error } = await supabase.rpc("leaderboard_reservas");
 
   if (error || !data) return [];
 
@@ -245,12 +245,12 @@ export async function obtenerLeaderboard() {
     if (!userMap[r.id_usuario]) {
       userMap[r.id_usuario] = {
         id: r.id_usuario,
-        nombre: r.Usuario ? `${r.Usuario.nombre} ${r.Usuario.primer_apellido?.[0] || ""}` : "?",
-        avatar: r.Usuario ? `${r.Usuario.nombre?.[0] || ""}${r.Usuario.primer_apellido?.[0] || ""}`.toUpperCase() : "??",
+        nombre: `${r.nombre} ${r.primer_apellido?.[0] || ""}`,
+        avatar: `${r.nombre?.[0] || ""}${r.primer_apellido?.[0] || ""}`.toUpperCase(),
         reservas: [],
       };
     }
-    userMap[r.id_usuario].reservas.push(r);
+    userMap[r.id_usuario].reservas.push({ id_estado: r.id_estado, fecha_reserva: r.fecha_reserva });
   }
 
   const leaderboard = Object.values(userMap)
