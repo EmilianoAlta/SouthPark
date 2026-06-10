@@ -31,6 +31,7 @@ const FLOOR_CONFIG = {
 export default function DashboardApp({ onLogout }) {
   const [screen, setScreen] = useState("areas");
   const [animateIn, setAnimateIn] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // drawer móvil
   const { userProfile } = useUser();
 
   const [selectedArea, setSelectedArea] = useState(null);
@@ -334,9 +335,12 @@ export default function DashboardApp({ onLogout }) {
   }
   
   return (
-    <div style={{ fontFamily: "'Nunito Sans', sans-serif", minHeight: "100vh", display: "flex", flexDirection: "column", background: "#1a0a1e", color: C.text }}>
+    <div style={{ fontFamily: "'Nunito Sans', sans-serif", height: "100vh", display: "flex", flexDirection: "column", background: "#1a0a1e", color: C.text, overflow: "hidden" }}>
       <header style={{ background: C.headerBg, height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 28px", borderBottom: `1px solid ${C.glassBorder}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <button className="dash-hamburger" aria-label="Menú" onClick={() => setSidebarOpen(o => !o)} style={{ background: "transparent", border: "none", color: C.white, cursor: "pointer", padding: 4, alignItems: "center", justifyContent: "center" }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+          </button>
           <Logo size={44} />
           <span style={{ fontWeight: 800, fontSize: 18 }}>WorkSpace</span>
         </div>
@@ -349,7 +353,8 @@ export default function DashboardApp({ onLogout }) {
       </header>
 
       <div className="dash-layout">
-        <nav className="dash-sidebar" style={{ background: C.cardLight, padding: "24px 16px", display: "flex", flexDirection: "column", gap: 6, borderRight: `1px solid ${C.glassBorder}` }}>
+        {sidebarOpen && <div className="dash-backdrop" onClick={() => setSidebarOpen(false)} />}
+        <nav className={`dash-sidebar${sidebarOpen ? " open" : ""}`} style={{ background: C.cardLight, padding: "24px 16px", display: "flex", flexDirection: "column", gap: 6, borderRight: `1px solid ${C.glassBorder}` }}>
            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", marginBottom: 12 }}>
             <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontWeight: 800, fontSize: 18 }}>
               {iniciales}
@@ -366,7 +371,7 @@ export default function DashboardApp({ onLogout }) {
           <div style={{ height: 1, background: "rgba(255,255,255,0.2)", margin: "0 0 8px" }} />
 
           {sidebarItems.map(item => (
-            <button key={item.id} onClick={() => setScreen(item.id)} style={{
+            <button key={item.id} onClick={() => { setScreen(item.id); setSidebarOpen(false); }} style={{
               display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 10, border: "none",
               cursor: "pointer", fontSize: 14, fontWeight: screen === item.id ? 700 : 500, color: C.white, textAlign: "left", width: "100%",
               background: screen === item.id ? "linear-gradient(90deg, rgba(161,0,255,0.35) 0%, rgba(161,0,255,0.12) 100%)" : "transparent"
@@ -408,8 +413,8 @@ export default function DashboardApp({ onLogout }) {
                   )}
                 </div>
 
-                <div style={{ display: "flex", gap: 24 }}>
-                  <div style={{ flex: 1, borderRadius: 16, border: `2px solid ${C.glassBorder}`, background: "#000", padding: 20, position: "relative", overflow: "hidden" }}>
+                <div className="floor-map-row" style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                  <div style={{ flex: "2 1 360px", borderRadius: 16, border: `2px solid ${C.glassBorder}`, background: "#000", padding: 20, position: "relative", overflow: "hidden" }}>
                     <div style={{ position: "absolute", top: 16, left: 20, fontSize: 12, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", zIndex: 2 }}>{FLOOR_CONFIG[selectedFloor]?.label || `Piso ${selectedFloor}`}</div>
                     <svg viewBox="0 0 100 71" style={{ width: "100%", height: "auto" }}>
                       {/* Plano real como fondo */}
@@ -471,7 +476,7 @@ export default function DashboardApp({ onLogout }) {
                     </div>
                   </div>
 
-                  <div style={{ width: 300, borderRadius: 16, background: C.cardDark, padding: 24, border: `1px solid ${C.glassBorder}`, display: "flex", flexDirection: "column" }}>
+                  <div style={{ flex: "1 1 280px", minWidth: 260, borderRadius: 16, background: C.cardDark, padding: 24, border: `1px solid ${C.glassBorder}`, display: "flex", flexDirection: "column" }}>
                     {selectedArea ? (
                       <>
                         <h3 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{selectedArea.type}</h3>
@@ -542,7 +547,7 @@ export default function DashboardApp({ onLogout }) {
                 {/* MODAL DE RESERVA */}
                 {reserveModal && (
                   <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={cerrarModalYLimpiar}>
-                    <div onClick={e => e.stopPropagation()} style={{ background: C.cardDark, borderRadius: 20, padding: 36, width: 480, border: `1px solid ${C.glassBorder}`, animation: "fadeUp 0.3s ease" }}>
+                    <div onClick={e => e.stopPropagation()} style={{ background: C.cardDark, borderRadius: 20, padding: 36, width: "min(480px, 92vw)", maxHeight: "90vh", overflowY: "auto", border: `1px solid ${C.glassBorder}`, animation: "fadeUp 0.3s ease" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
                         <h2 style={{ fontSize: 22, fontWeight: 800 }}>Reservar Espacio</h2>
                         {/* Countdown timer */}
@@ -690,7 +695,7 @@ export default function DashboardApp({ onLogout }) {
                 {!iaLoading && iaData && (
                   <>
                     <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Insights de Comportamiento</h2>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 32 }}>
                       {[
                         { title: iaData.insights.horario.titulo, ins: iaData.insights.horario.insight, det: iaData.insights.horario.detalle, icon: Icons.clock, acc: C.purple1 },
                         { title: iaData.insights.espacios.titulo, ins: iaData.insights.espacios.insight, det: iaData.insights.espacios.detalle, icon: Icons.pin, acc: C.pink },
@@ -815,11 +820,11 @@ export default function DashboardApp({ onLogout }) {
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
                       {/* Logros */}
                       <div>
                         <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Logros ({gamiData.badges.filter(b => b.earned).length}/{gamiData.badges.length})</h2>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
                           {gamiData.badges.map((b, i) => (
                             <div key={b.id} style={{
                               padding: 16, borderRadius: 14, textAlign: "center",

@@ -239,9 +239,9 @@ export default function ParkingView({ animateIn, ShowFloatAlert }) {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 24 }}>
+      <div className="floor-map-row" style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
         {/* Mapa */}
-        <div style={{ flex: 1, borderRadius: 16, border: `2px solid ${C.glassBorder}`, background: "#000", padding: 20, position: "relative", overflow: "hidden" }}>
+        <div style={{ flex: "2 1 360px", borderRadius: 16, border: `2px solid ${C.glassBorder}`, background: "#000", padding: 20, position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: 16, left: 20, fontSize: 12, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", zIndex: 2 }}>
             {PARKING_CONFIG[selectedLevel]?.label}
           </div>
@@ -280,7 +280,7 @@ export default function ParkingView({ animateIn, ShowFloatAlert }) {
         </div>
 
         {/* Panel lateral */}
-        <div style={{ width: 300, borderRadius: 16, background: C.cardDark, padding: 24, border: `1px solid ${C.glassBorder}`, display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: "1 1 280px", minWidth: 260, borderRadius: 16, background: C.cardDark, padding: 24, border: `1px solid ${C.glassBorder}`, display: "flex", flexDirection: "column" }}>
           {selectedCajon ? (
             <>
               <h3 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Cajón {selectedCajon.name}</h3>

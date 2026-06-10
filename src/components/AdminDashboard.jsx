@@ -564,7 +564,7 @@ export default function AdminDashboard({ animateIn }) {
           </div>
 
           {/* Charts row 1 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginBottom: 20 }}>
             <Card title="Reservas por Estado">
               <DonutChart data={donutData} />
             </Card>
@@ -582,7 +582,7 @@ export default function AdminDashboard({ animateIn }) {
           </div>
 
           {/* Charts row 2 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginBottom: 20 }}>
             <Card title="Espacios Más Utilizados">
               <BarChart data={topEspacios} color={C.purple1} />
             </Card>
@@ -1009,7 +1009,7 @@ export default function AdminDashboard({ animateIn }) {
           </div>
 
           {/* User donut + reservas */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginBottom: 20 }}>
             <Card title="Distribución de Reservas">
               <DonutChart data={[
                 { label: "Confirmadas", value: userReservas.filter(r => r.id_estado === 1).length, color: C.blue },
