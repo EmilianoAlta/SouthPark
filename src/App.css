@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,500;0,6..12,700;0,6..12,800;1,6..12,400&family=JetBrains+Mono:wght@400;700&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
 body { font-family: 'Nunito Sans', 'Segoe UI', sans-serif; }
 
 @keyframes fadeUp { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: translateY(0) } }
