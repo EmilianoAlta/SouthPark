@@ -43,6 +43,7 @@ function calcularXP(reservas) {
     if (r.id_estado === 5) xp += XP_FINALIZADA;
     else if (r.id_estado === 2) xp += XP_ACTIVA + XP_CHECKIN;
     else if (r.id_estado === 4) xp += XP_CANCELADA;
+    else if (r.id_estado === 6) xp += XP_NOSHOW; // perdida (no hizo check-in a tiempo)
     else if (r.id_estado === 1 || r.id_estado === 3) {
       // Si la reserva ya pasó y no hizo check-in → no-show
       if (r.fecha_reserva < hoy) xp += XP_NOSHOW;
@@ -62,7 +63,7 @@ function calcularRacha(reservas) {
   // Obtener fechas únicas con reservas activas (no canceladas), ordenadas desc
   const fechasSet = new Set();
   for (const r of reservas) {
-    if (r.id_estado !== 4) fechasSet.add(r.fecha_reserva);
+    if (r.id_estado !== 4 && r.id_estado !== 6) fechasSet.add(r.fecha_reserva);
   }
   const fechas = [...fechasSet].sort().reverse();
   if (fechas.length === 0) return 0;
@@ -94,7 +95,7 @@ function calcularBadges(reservas, xp, nivel, racha) {
   const hoy = new Date();
   const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
 
-  const noCancel = reservas.filter(r => r.id_estado !== 4);
+  const noCancel = reservas.filter(r => r.id_estado !== 4 && r.id_estado !== 6);
   const finalizadas = reservas.filter(r => r.id_estado === 5 || r.id_estado === 2);
   const canceladasMes = reservas.filter(r => r.id_estado === 4 && r.fecha_reserva?.startsWith(mesActual));
 

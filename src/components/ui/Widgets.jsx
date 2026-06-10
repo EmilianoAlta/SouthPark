@@ -14,6 +14,7 @@ export const StatusBadge = ({ status }) => {
     ocupado: { l: "Ocupado", c: C.danger, bg: "rgba(248,113,113,0.12)" },
     mantenimiento: { l: "Mantenimiento", c: C.warning, bg: "rgba(251,191,36,0.12)" },
     finalizada: { l: "Finalizada", c: C.textMuted, bg: "rgba(255,255,255,0.06)" },
+    perdida: { l: "Perdida", c: C.danger, bg: "rgba(248,113,113,0.12)" },
   };
   const s = m[status] || m.pendiente;
   return (

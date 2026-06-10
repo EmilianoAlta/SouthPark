@@ -138,6 +138,7 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
     if (filter === "pending" && r.id_estado === 3) return true;
     if (filter === "cancelled" && r.id_estado === 4) return true;
     if (filter === "finished" && r.id_estado === 5) return true;
+    if (filter === "missed" && r.id_estado === 6) return true;
     return false;
   });
 
@@ -170,10 +171,10 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
     : null;
   const reservasDelDia = selectedDayStr ? (reservasPorDia[selectedDayStr] || []) : [];
 
-  const statusKey = (r) => r.id_estado === 1 ? "confirmed" : r.id_estado === 2 ? "active" : r.id_estado === 3 ? "pending" : r.id_estado === 4 ? "cancelled" : r.id_estado === 5 ? "finished" : "unknown";
-  const statusColors = { confirmed: C.success, active: C.blue, pending: C.warning, cancelled: C.danger, finished: C.textMuted };
+  const statusKey = (r) => r.id_estado === 1 ? "confirmed" : r.id_estado === 2 ? "active" : r.id_estado === 3 ? "pending" : r.id_estado === 4 ? "cancelled" : r.id_estado === 5 ? "finished" : r.id_estado === 6 ? "missed" : "unknown";
+  const statusColors = { confirmed: C.success, active: C.blue, pending: C.warning, cancelled: C.danger, finished: C.textMuted, missed: C.danger };
   // Claves en español para StatusBadge
-  const estadoBadge = (id_estado) => id_estado === 1 ? "confirmada" : id_estado === 2 ? "activa" : id_estado === 3 ? "pendiente" : id_estado === 4 ? "cancelada" : "finalizada";
+  const estadoBadge = (id_estado) => id_estado === 1 ? "confirmada" : id_estado === 2 ? "activa" : id_estado === 3 ? "pendiente" : id_estado === 4 ? "cancelada" : id_estado === 6 ? "perdida" : "finalizada";
   const estadoColor = (id_estado) => id_estado === 2 ? C.blue : id_estado === 3 ? C.warning : id_estado === 1 ? C.success : id_estado === 4 ? C.danger : C.textMuted;
 
   // ── Parking stats ──
@@ -483,7 +484,7 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
                         >
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                             <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{r.Espacio?.tipo || "Espacio"}</span>
-                            <StatusBadge status={sk} />
+                            <StatusBadge status={estadoBadge(r.id_estado)} />
                           </div>
                           <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 4 }}>{r.Espacio?.codigo}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: C.textMuted }}>
@@ -530,6 +531,7 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
               { id: "confirmed", l: "Confirmadas" },
               { id: "active", l: "Activas" },
               { id: "finished", l: "Finalizadas" },
+              { id: "missed", l: "Perdidas" },
               { id: "cancelled", l: "Canceladas" }].map(f => (
               <button key={f.id} onClick={() => setFilter(f.id)} style={{
                 padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13,
@@ -595,7 +597,7 @@ export default function ReservationsView({ animateIn, onGoToAreas }) {
                         <td style={{ padding: "14px 16px", fontSize: 13 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>{Icons.users} {r.asistentes}</div>
                         </td>
-                        <td style={{ padding: "14px 16px" }}><StatusBadge status={sk} /></td>
+                        <td style={{ padding: "14px 16px" }}><StatusBadge status={estadoBadge(r.id_estado)} /></td>
                         <td style={{ padding: "14px 16px", textAlign: "right" }}>
                           {(r.id_estado === 1 || r.id_estado === 3) && (
                             <button

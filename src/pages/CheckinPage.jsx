@@ -336,6 +336,7 @@ export default function CheckinPage({ onBackToApp, idZona = null, idParking = nu
                       : reserva.id_estado === 2 ? "activa"
                       : reserva.id_estado === 3 ? "pendiente"
                       : reserva.id_estado === 4 ? "cancelada"
+                      : reserva.id_estado === 6 ? "perdida"
                       : "finalizada"
                     }
                   />
