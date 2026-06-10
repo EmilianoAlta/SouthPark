@@ -12,8 +12,20 @@ gestionar espacios y consultar reportes de uso.
 
 | Recurso | Enlace |
 |---------|--------|
-| 🌐 Sistema desplegado | https://workhub-mty.vercel.app|
+| 🌐 Sistema desplegado (Vercel) | https://workhub-mty.vercel.app |
 | 💻 Repositorio | https://github.com/EmilianoAlta/SouthPark |
+| 📋 Gestión del proyecto (Azure DevOps Boards) | ⚠️ _Pendiente: enlace del tablero `WorkHub MTY Team`_ |
+| 🎥 Video funcional | ⚠️ _Pendiente: enlace del video_ |
+| 🖥️ Presentación final | ⚠️ _Pendiente: enlace de la presentación_ |
+
+> ⚠️ Las filas marcadas son los datos que falta completar antes de la entrega.
+
+### Credenciales de prueba
+
+```
+Usuario:     ⚠️ pendiente — <correo de prueba>@accenture.com
+Contraseña:  ⚠️ pendiente — <contraseña de prueba>
+```
 
 > El registro está restringido a dominios `@accenture.com` (y `@tec.mx` habilitado para
 > debug durante el desarrollo).
@@ -32,19 +44,28 @@ Aplicación **SPA (Single Page Application)** con backend **BaaS (Backend as a S
 │  ─ @supabase/supabase-js       │         │  ─ RPCs / triggers / pg_cron        │
 │  ─ Realtime (WebSocket)        │ ◀────── │  ─ Realtime (postgres_changes)      │
 └──────────────────────────────┘         └─────────────────────────────────────┘
-            │
+            │  │
+            │  └────▶ OpenAI GPT-4o-mini (recomendaciones IA, con fallback local)
             ▼
    Vercel (CDN global, build estático, HTTPS automático)
 ```
 
 - **Frontend:** React 18 + Vite 5, sin TypeScript. Navegación basada en estado (sin
-  `react-router`, salvo la ruta `/checkin` detectada manualmente). Estilos inline con
-  tokens de color centralizados en `src/config/constants.js`.
-- **Backend:** Supabase (PostgreSQL). La lógica de negocio crítica (validación de
-  conflictos, creación/cancelación de reservas, check-in/out, liberación automática) vive
-  en **RPCs y triggers** de la base de datos, no en el cliente.
+  `react-router`); la ruta `/checkin` se detecta manualmente con
+  `window.location.pathname` para abrir el flujo del QR. Estilos inline con tokens de
+  color centralizados en `src/config/constants.js`.
+- **Backend:** Supabase (PostgreSQL). La lógica de negocio crítica vive en **RPCs y
+  triggers** de la base de datos, no en el cliente: `crear_reserva`, `cancelar_reserva` y
+  `existe_conflicto_reserva` (validación de conflictos), más triggers y `pg_cron` para la
+  liberación/finalización automática de reservas.
+- **Tiempo real:** los cambios de ocupación se reflejan vía **Supabase Realtime**
+  (`postgres_changes`) en el mapa de espacios (`Dashboard`), el estacionamiento
+  (`ParkingView`) y el check-in (`CheckinPage`).
 - **Seguridad:** autenticación con JWT y **Row Level Security** por usuario/rol. Las
   escrituras sensibles pasan por RPCs validados server-side.
+- **Recomendaciones IA:** motor en `src/lib/recommendations.js` que usa **OpenAI
+  GPT-4o-mini** cuando hay API key, con **fallback local** (análisis del historial) si no
+  la hay o falla la llamada.
 - **Despliegue:** build estático servido desde la CDN de Vercel. Arquitectura serverless
   (sin servidor propio). Despliegue **manual** con la CLI de Vercel; la gestión del
   trabajo se lleva en **Azure DevOps Boards**.
@@ -97,16 +118,20 @@ Catálogo de estados de reserva (`id_estado`): 1 Confirmada · 2 Activa · 3 Pen
 
 ## Uso del sistema
 
-1. **Registro / Login** con un correo `@accenture.com`.
-2. **Áreas disponibles:** elige un piso, haz clic en un área del plano para ver su detalle
-   y reservar (fecha, hora, asistentes). El sistema valida conflictos y cupo en vivo.
-3. **Estacionamiento:** elige un nivel, selecciona un cajón disponible y reserva.
+1. **Registro / Login** con un correo `@accenture.com` (o `@tec.mx` en desarrollo).
+2. **Áreas disponibles:** elige un piso (PB, MZ, Piso 3, Piso 9), haz clic en un área del
+   plano para ver su detalle y reservar (fecha, hora, asistentes). El sistema valida
+   conflictos y cupo server-side, y el mapa refleja la ocupación **en tiempo real**.
+3. **Estacionamiento:** elige uno de los 7 niveles (Sótano 3 → Azotea T2), selecciona un
+   cajón disponible y reserva; la disponibilidad también se actualiza en vivo.
 4. **Mis reservas:** consulta, filtra por estado y cancela tus reservas.
 5. **Check-in / Check-out:** escanea el QR (ruta `/checkin`) dentro de la ventana de
-   tiempo para confirmar tu llegada y registrar tu salida.
-6. **Gamificación e IA:** revisa tu progreso (XP, nivel, badges) y recomendaciones
-   personalizadas.
-7. **Administración** (rol admin): edita planos/cajones y consulta reportes de uso.
+   tiempo para confirmar tu llegada y registrar tu salida; al salir el espacio se libera.
+6. **Gamificación e IA:** revisa tu progreso (XP, nivel, rachas, badges, leaderboard) y
+   recomendaciones personalizadas según tu historial.
+7. **Administración** (rol admin, `id_rol = 1`): edita planos y cajones desde los editores
+   visuales y consulta el dashboard de reportes (ocupación, asistencias, cancelaciones,
+   ranking de espacios), exportable a PDF.
 
 ---
 
